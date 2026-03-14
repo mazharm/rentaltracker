@@ -128,6 +128,31 @@ export interface ScheduleELineItems {
   totalExpenses: number;
 }
 
+// --- Sharing / Multi-account types ---
+
+export type DataSource =
+  | { type: 'own' }
+  | { type: 'shared'; accountId: string; sharingUrl: string; label: string };
+
+export interface SharingConfig {
+  version: 1;
+  myShareLink: string | null;
+  sharedAccounts: SharedAccount[];
+}
+
+export interface SharedAccount {
+  id: string;
+  label: string;
+  sharingUrl: string;
+  addedAt: string;
+}
+
+export function createDefaultSharingConfig(): SharingConfig {
+  return { version: 1, myShareLink: null, sharedAccounts: [] };
+}
+
+// --- Helpers ---
+
 export function createEmptyYearData(year: number): YearData {
   return { version: 1, year, rentEntries: [], expenseEntries: [] };
 }

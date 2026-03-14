@@ -8,8 +8,17 @@ import {
   Button,
   Divider,
   Badge,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  MenuItemRadio,
+  MessageBar,
+  MessageBarBody,
   shorthands,
 } from '@fluentui/react-components';
+import type { MenuProps } from '@fluentui/react-components';
 import {
   Home24Regular,
   Home24Filled,
@@ -23,6 +32,7 @@ import {
   DataBarVertical24Filled,
   Settings24Regular,
   Settings24Filled,
+  PeopleSwap24Regular,
 } from '@fluentui/react-icons';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useStore } from '../store/useStore';
@@ -138,9 +148,33 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
-  const { isSyncing, user } = useStore();
+  const { isSyncing, user, activeDataSource, sharingConfig, setActiveDataSource } = useStore();
 
   const currentPath = '/' + (location.pathname.split('/')[1] || '');
+
+  const sharedAccounts = sharingConfig.sharedAccounts;
+  const hasMultipleAccounts = sharedAccounts.length > 0;
+
+  const activeLabel = activeDataSource.type === 'own'
+    ? 'My Data'
+    : activeDataSource.label;
+
+  const handleAccountSwitch: MenuProps['onCheckedValueChange'] = async (_, data) => {
+    const selected = data.checkedItems[0];
+    if (selected === 'own') {
+      await setActiveDataSource({ type: 'own' });
+    } else {
+      const account = sharedAccounts.find((a) => a.id === selected);
+      if (account) {
+        await setActiveDataSource({
+          type: 'shared',
+          accountId: account.id,
+          sharingUrl: account.sharingUrl,
+          label: account.label,
+        });
+      }
+    }
+  };
 
   return (
     <div className={styles.root}>
@@ -152,11 +186,40 @@ export function Layout() {
               Syncing...
             </Badge>
           )}
+          {hasMultipleAccounts && (
+            <Menu
+              checkedValues={{ account: [activeDataSource.type === 'own' ? 'own' : activeDataSource.accountId] }}
+              onCheckedValueChange={handleAccountSwitch}
+            >
+              <MenuTrigger disableButtonEnhancement>
+                <Button icon={<PeopleSwap24Regular />} size="small" appearance="subtle">
+                  {!isMobile && activeLabel}
+                </Button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  <MenuItemRadio name="account" value="own">My Data</MenuItemRadio>
+                  {sharedAccounts.map((a) => (
+                    <MenuItemRadio key={a.id} name="account" value={a.id}>
+                      {a.label}
+                    </MenuItemRadio>
+                  ))}
+                  <MenuItem onClick={() => navigate('/settings')}>Manage accounts...</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          )}
           {user && (
             <Text size={200}>{user.name || user.username}</Text>
           )}
         </div>
       </header>
+
+      {activeDataSource.type === 'shared' && (
+        <MessageBar intent="info" style={{ flexShrink: 0 }}>
+          <MessageBarBody>Viewing shared data: {activeDataSource.label}</MessageBarBody>
+        </MessageBar>
+      )}
 
       <div className={styles.body}>
         {!isMobile && (

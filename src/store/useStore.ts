@@ -9,11 +9,15 @@ import {
   ExpenseEntry,
   RecurringExpenseTemplate,
   ScheduleEReport,
+  DataSource,
+  SharingConfig,
+  SharedAccount,
   createDefaultConfig,
+  createDefaultSharingConfig,
   createEmptyYearData,
   DEFAULT_TEMPLATES,
 } from '../models/types';
-import { readJsonFile } from '../api/onedrive';
+import { readJsonFile, createShareLink as apiCreateShareLink } from '../api/onedrive';
 import { writeWithArchive } from '../api/archive';
 import { accrueRentForProperties } from '../engine/rentAccrual';
 import { accrueExpensesForTemplates } from '../engine/expenseAccrual';
@@ -31,6 +35,16 @@ interface AppStore {
   currentYear: number;
   configETag: string | null;
   yearETags: Record<number, string | null>;
+
+  // Sharing / Multi-account
+  activeDataSource: DataSource;
+  sharingConfig: SharingConfig;
+  setActiveDataSource: (source: DataSource) => Promise<void>;
+  addSharedAccount: (label: string, sharingUrl: string) => Promise<void>;
+  removeSharedAccount: (id: string) => Promise<void>;
+  createShareLink: () => Promise<string>;
+  loadSharingConfig: () => Promise<void>;
+  saveSharingConfig: () => Promise<void>;
 
   // UI
   isLoading: boolean;
@@ -82,6 +96,10 @@ export const useStore = create<AppStore>((set, get) => ({
   configETag: null,
   yearETags: {},
 
+  // Sharing
+  activeDataSource: { type: 'own' },
+  sharingConfig: createDefaultSharingConfig(),
+
   // UI
   isLoading: false,
   isSyncing: false,
@@ -89,20 +107,83 @@ export const useStore = create<AppStore>((set, get) => ({
   error: null,
   clearError: () => set({ error: null }),
 
-  // Actions — Data loading
+  // --- Sharing actions ---
+
+  loadSharingConfig: async () => {
+    // Always read from own approot — sharing config is per-user
+    const result = await readJsonFile<SharingConfig>('sharing.json', { type: 'own' });
+    if (result) {
+      set({ sharingConfig: result.data });
+    }
+  },
+
+  saveSharingConfig: async () => {
+    const { sharingConfig } = get();
+    await writeWithArchive('sharing.json', sharingConfig, undefined, { type: 'own' });
+  },
+
+  setActiveDataSource: async (source) => {
+    set({ activeDataSource: source });
+    await get().loadFromOneDrive();
+  },
+
+  addSharedAccount: async (label, sharingUrl) => {
+    const { sharingConfig } = get();
+    const newAccount: SharedAccount = {
+      id: uuidv4(),
+      label,
+      sharingUrl,
+      addedAt: new Date().toISOString(),
+    };
+    set({
+      sharingConfig: {
+        ...sharingConfig,
+        sharedAccounts: [...sharingConfig.sharedAccounts, newAccount],
+      },
+    });
+    await get().saveSharingConfig();
+  },
+
+  removeSharedAccount: async (id) => {
+    const { sharingConfig, activeDataSource } = get();
+    set({
+      sharingConfig: {
+        ...sharingConfig,
+        sharedAccounts: sharingConfig.sharedAccounts.filter((a) => a.id !== id),
+      },
+    });
+    // If the removed account was active, switch back to own
+    if (activeDataSource.type === 'shared' && activeDataSource.accountId === id) {
+      set({ activeDataSource: { type: 'own' } });
+      await get().loadFromOneDrive();
+    }
+    await get().saveSharingConfig();
+  },
+
+  createShareLink: async () => {
+    const link = await apiCreateShareLink();
+    const { sharingConfig } = get();
+    set({ sharingConfig: { ...sharingConfig, myShareLink: link } });
+    await get().saveSharingConfig();
+    return link;
+  },
+
+  // --- Data loading ---
+
   loadFromOneDrive: async () => {
+    const { activeDataSource } = get();
     set({ isLoading: true, error: null });
     try {
-      // Load config
-      const configResult = await readJsonFile<Config>('config.json');
+      // Load config from the active data source
+      const configResult = await readJsonFile<Config>('config.json', activeDataSource);
       let config: Config;
       let configETag: string | null = null;
 
       if (configResult) {
         config = configResult.data;
         configETag = configResult.eTag;
-      } else {
-        // First run — create default config with seed templates
+      } else if (activeDataSource.type === 'own') {
+        // First run — create default config with seed templates (own data only)
         config = createDefaultConfig();
         const today = new Date().toISOString().split('T')[0];
         config.recurringExpenseTemplates = DEFAULT_TEMPLATES.map((t) => ({
@@ -110,7 +191,9 @@ export const useStore = create<AppStore>((set, get) => ({
           id: uuidv4(),
           startDate: today,
         }));
-        await writeWithArchive('config.json', config);
+        await writeWithArchive('config.json', config, undefined, activeDataSource);
+      } else {
+        throw new Error('Shared account has no data. The owner may not have set up their account yet.');
       }
 
       // Load current year data
@@ -118,9 +201,8 @@ export const useStore = create<AppStore>((set, get) => ({
       const yearData: Record<number, YearData> = {};
       const yearETags: Record<number, string | null> = {};
 
-      // Load current and previous year
       for (const year of [currentYear - 1, currentYear]) {
-        const result = await readJsonFile<YearData>(`data/${year}.json`);
+        const result = await readJsonFile<YearData>(`data/${year}.json`, activeDataSource);
         if (result) {
           yearData[year] = result.data;
           yearETags[year] = result.eTag;
@@ -166,12 +248,12 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   saveConfig: async () => {
-    const { config, configETag } = get();
+    const { config, configETag, activeDataSource } = get();
     if (!config) return;
 
     set({ isSyncing: true, error: null });
     try {
-      const newETag = await writeWithArchive('config.json', config, configETag);
+      const newETag = await writeWithArchive('config.json', config, configETag, activeDataSource);
       set({ configETag: newETag, lastSyncTime: new Date() });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -182,13 +264,13 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   saveYearData: async (year: number) => {
-    const { yearData, yearETags } = get();
+    const { yearData, yearETags, activeDataSource } = get();
     const data = yearData[year];
     if (!data) return;
 
     set({ isSyncing: true, error: null });
     try {
-      const newETag = await writeWithArchive(`data/${year}.json`, data, yearETags[year]);
+      const newETag = await writeWithArchive(`data/${year}.json`, data, yearETags[year], activeDataSource);
       set({
         yearETags: { ...yearETags, [year]: newETag },
         lastSyncTime: new Date(),
@@ -203,12 +285,9 @@ export const useStore = create<AppStore>((set, get) => ({
 
   syncAfterConfigChange: async () => {
     const store = get();
-    // Save config to OneDrive
     await store.saveConfig();
-    // Re-run accrual engines so yearData reflects the config change
     store.accrueRent();
     store.accrueExpenses();
-    // Persist updated yearData for all loaded years
     const { yearData } = get();
     for (const yearStr of Object.keys(yearData)) {
       await store.saveYearData(Number(yearStr));
@@ -220,19 +299,14 @@ export const useStore = create<AppStore>((set, get) => ({
     const { config } = get();
     if (!config) return;
     const newProperty: Property = { ...property, id: uuidv4() };
-    set({
-      config: { ...config, properties: [...config.properties, newProperty] },
-    });
+    set({ config: { ...config, properties: [...config.properties, newProperty] } });
   },
 
   updateProperty: (id, updates) => {
     const { config } = get();
     if (!config) return;
     set({
-      config: {
-        ...config,
-        properties: config.properties.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-      },
+      config: { ...config, properties: config.properties.map((p) => (p.id === id ? { ...p, ...updates } : p)) },
     });
   },
 
@@ -240,10 +314,7 @@ export const useStore = create<AppStore>((set, get) => ({
     const { config } = get();
     if (!config) return;
     set({
-      config: {
-        ...config,
-        properties: config.properties.map((p) => (p.id === id ? { ...p, status: 'inactive' as const } : p)),
-      },
+      config: { ...config, properties: config.properties.map((p) => (p.id === id ? { ...p, status: 'inactive' as const } : p)) },
     });
   },
 
@@ -253,10 +324,7 @@ export const useStore = create<AppStore>((set, get) => ({
     if (!config) return;
     const newTemplate: RecurringExpenseTemplate = { ...template, id: uuidv4() };
     set({
-      config: {
-        ...config,
-        recurringExpenseTemplates: [...config.recurringExpenseTemplates, newTemplate],
-      },
+      config: { ...config, recurringExpenseTemplates: [...config.recurringExpenseTemplates, newTemplate] },
     });
   },
 
@@ -277,10 +345,7 @@ export const useStore = create<AppStore>((set, get) => ({
     const { config } = get();
     if (!config) return;
     set({
-      config: {
-        ...config,
-        recurringExpenseTemplates: config.recurringExpenseTemplates.filter((t) => t.id !== id),
-      },
+      config: { ...config, recurringExpenseTemplates: config.recurringExpenseTemplates.filter((t) => t.id !== id) },
     });
   },
 
@@ -288,24 +353,20 @@ export const useStore = create<AppStore>((set, get) => ({
   accrueRent: () => {
     const { config, yearData } = get();
     if (!config) return;
-    const updated = accrueRentForProperties(config.properties, yearData);
-    set({ yearData: updated });
+    set({ yearData: accrueRentForProperties(config.properties, yearData) });
   },
 
   overrideRent: (propertyId, month, year, override) => {
     const { yearData } = get();
     const data = yearData[year];
     if (!data) return;
-
     set({
       yearData: {
         ...yearData,
         [year]: {
           ...data,
           rentEntries: data.rentEntries.map((e) =>
-            e.propertyId === propertyId && e.month === month && e.year === year
-              ? { ...e, ...override }
-              : e
+            e.propertyId === propertyId && e.month === month && e.year === year ? { ...e, ...override } : e
           ),
         },
       },
@@ -315,30 +376,24 @@ export const useStore = create<AppStore>((set, get) => ({
   retainDeposit: (propertyId, retainedAmount, month, year) => {
     const { config, yearData } = get();
     if (!config) return;
-
     const property = config.properties.find((p) => p.id === propertyId);
     if (!property) return;
-
     const data = yearData[year] || createEmptyYearData(year);
-
-    // Add synthetic rent entry
-    const syntheticEntry: RentEntry = {
-      id: uuidv4(),
-      propertyId,
-      month,
-      year,
-      expectedAmount: 0,
-      actualAmount: retainedAmount,
-      status: 'deposit_retained',
-      notes: `Deposit retained — ${property.name}`,
-    };
-
     set({
       yearData: {
         ...yearData,
         [year]: {
           ...data,
-          rentEntries: [...data.rentEntries, syntheticEntry],
+          rentEntries: [...data.rentEntries, {
+            id: uuidv4(),
+            propertyId,
+            month,
+            year,
+            expectedAmount: 0,
+            actualAmount: retainedAmount,
+            status: 'deposit_retained' as const,
+            notes: `Deposit retained — ${property.name}`,
+          }],
         },
       },
     });
@@ -348,28 +403,17 @@ export const useStore = create<AppStore>((set, get) => ({
   accrueExpenses: () => {
     const { config, yearData } = get();
     if (!config) return;
-    const updated = accrueExpensesForTemplates(
-      config.recurringExpenseTemplates,
-      config.properties,
-      yearData
-    );
-    set({ yearData: updated });
+    set({ yearData: accrueExpensesForTemplates(config.recurringExpenseTemplates, config.properties, yearData) });
   },
 
   addExpense: (entry) => {
     const year = new Date(entry.date).getFullYear();
     const { yearData } = get();
     const data = yearData[year] || createEmptyYearData(year);
-
-    const newEntry: ExpenseEntry = { ...entry, id: uuidv4() };
-
     set({
       yearData: {
         ...yearData,
-        [year]: {
-          ...data,
-          expenseEntries: [...data.expenseEntries, newEntry],
-        },
+        [year]: { ...data, expenseEntries: [...data.expenseEntries, { ...entry, id: uuidv4() }] },
       },
     });
   },
@@ -378,14 +422,10 @@ export const useStore = create<AppStore>((set, get) => ({
     const { yearData } = get();
     const data = yearData[year];
     if (!data) return;
-
     set({
       yearData: {
         ...yearData,
-        [year]: {
-          ...data,
-          expenseEntries: data.expenseEntries.filter((e) => e.id !== id),
-        },
+        [year]: { ...data, expenseEntries: data.expenseEntries.filter((e) => e.id !== id) },
       },
     });
   },

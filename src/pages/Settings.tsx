@@ -74,9 +74,17 @@ export function Settings() {
   const styles = useStyles();
   const { instance } = useMsal();
   const isMobile = useIsMobile();
-  const { config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, syncAfterConfigChange } = useStore();
+  const {
+    config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, syncAfterConfigChange,
+    sharingConfig, activeDataSource, setActiveDataSource,
+    createShareLink, addSharedAccount, removeSharedAccount,
+  } = useStore();
   const [editTemplate, setEditTemplate] = useState<RecurringExpenseTemplate | null>(null);
   const [showAddTemplate, setShowAddTemplate] = useState(false);
+  const [showAddShared, setShowAddShared] = useState(false);
+  const [shareLabel, setShareLabel] = useState('');
+  const [shareUrl, setShareUrl] = useState('');
+  const [creatingLink, setCreatingLink] = useState(false);
 
   const templates = config?.recurringExpenseTemplates ?? [];
 
@@ -152,6 +160,129 @@ export function Settings() {
           </div>
         </Card>
       </div>
+
+      <Divider />
+
+      {/* Share My Data */}
+      <div className={styles.section} style={{ marginTop: 24 }}>
+        <Text as="h2" size={400} weight="semibold" block style={{ marginBottom: 8 }}>
+          Share My Data
+        </Text>
+        <Card className={styles.card}>
+          {sharingConfig.myShareLink ? (
+            <>
+              <div className={styles.cardRow}>
+                <Text size={200} style={{ wordBreak: 'break-all' }}>{sharingConfig.myShareLink}</Text>
+              </div>
+              <div className={styles.cardRow}>
+                <Button size="small" onClick={() => navigator.clipboard.writeText(sharingConfig.myShareLink!)}>
+                  Copy Link
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className={styles.cardRow}>
+              <Button
+                appearance="primary"
+                disabled={creatingLink}
+                onClick={async () => {
+                  setCreatingLink(true);
+                  try { await createShareLink(); } finally { setCreatingLink(false); }
+                }}
+              >
+                {creatingLink ? 'Creating...' : 'Create Share Link'}
+              </Button>
+            </div>
+          )}
+          <Text size={200} style={{ marginTop: 8, display: 'block' }}>
+            Share this link with another user so they can view and edit your rental data.
+          </Text>
+        </Card>
+      </div>
+
+      <Divider />
+
+      {/* Shared Accounts */}
+      <div className={styles.section} style={{ marginTop: 24 }}>
+        <div className={styles.sectionHeader}>
+          <Text as="h2" size={400} weight="semibold">Shared Accounts</Text>
+          <Button icon={<Add24Regular />} size="small" onClick={() => setShowAddShared(true)}>
+            Add
+          </Button>
+        </div>
+        {sharingConfig.sharedAccounts.length === 0 ? (
+          <Text size={200}>No shared accounts. Paste a share link from another user to access their data.</Text>
+        ) : (
+          sharingConfig.sharedAccounts.map((account) => {
+            const isActive = activeDataSource.type === 'shared' && activeDataSource.accountId === account.id;
+            return (
+              <Card key={account.id} className={styles.card}>
+                <div className={styles.cardRow}>
+                  <Text weight="semibold">{account.label}</Text>
+                  {isActive && <Badge color="success" appearance="filled" size="small">Active</Badge>}
+                </div>
+                <div className={styles.cardRow}>
+                  <Button
+                    size="small"
+                    appearance={isActive ? 'secondary' : 'primary'}
+                    onClick={() => {
+                      if (isActive) {
+                        setActiveDataSource({ type: 'own' });
+                      } else {
+                        setActiveDataSource({
+                          type: 'shared',
+                          accountId: account.id,
+                          sharingUrl: account.sharingUrl,
+                          label: account.label,
+                        });
+                      }
+                    }}
+                  >
+                    {isActive ? 'Switch to My Data' : 'Switch to This'}
+                  </Button>
+                  <Button
+                    icon={<Delete24Regular />}
+                    size="small"
+                    appearance="subtle"
+                    onClick={() => removeSharedAccount(account.id)}
+                  />
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      {showAddShared && (
+        <Dialog open onOpenChange={(_, d) => { if (!d.open) { setShowAddShared(false); setShareLabel(''); setShareUrl(''); } }}>
+          <DialogSurface style={isMobile ? { width: '100vw', height: '100vh', maxWidth: 'none', maxHeight: 'none', borderRadius: 0 } : {}}>
+            <DialogTitle>Add Shared Account</DialogTitle>
+            <DialogBody>
+              <Field label="Label" required>
+                <Input value={shareLabel} onChange={(_, d) => setShareLabel(d.value)} placeholder="e.g., Alice's Properties" />
+              </Field>
+              <Field label="Share Link" required>
+                <Input value={shareUrl} onChange={(_, d) => setShareUrl(d.value)} placeholder="Paste the OneDrive share link" />
+              </Field>
+            </DialogBody>
+            <DialogActions>
+              <Button appearance="secondary" onClick={() => { setShowAddShared(false); setShareLabel(''); setShareUrl(''); }}>Cancel</Button>
+              <Button
+                appearance="primary"
+                disabled={!shareLabel || !shareUrl}
+                onClick={async () => {
+                  await addSharedAccount(shareLabel, shareUrl);
+                  setShowAddShared(false);
+                  setShareLabel('');
+                  setShareUrl('');
+                }}
+              >
+                Add
+              </Button>
+            </DialogActions>
+          </DialogSurface>
+        </Dialog>
+      )}
 
       <Divider />
 

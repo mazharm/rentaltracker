@@ -1,5 +1,7 @@
+import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { msalInstance } from '../auth/AuthProvider';
-import { graphScopes } from '../auth/msalConfig';
+import { graphScopes, loginRequest } from '../auth/msalConfig';
+import { DataSource } from '../models/types';
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const APP_ROOT = '/me/drive/special/approot:';
@@ -8,11 +10,20 @@ async function getAccessToken(): Promise<string> {
   const account = msalInstance.getActiveAccount();
   if (!account) throw new Error('No active account. Please sign in.');
 
-  const response = await msalInstance.acquireTokenSilent({
-    ...graphScopes,
-    account,
-  });
-  return response.accessToken;
+  try {
+    const response = await msalInstance.acquireTokenSilent({
+      ...graphScopes,
+      account,
+    });
+    return response.accessToken;
+  } catch (e) {
+    // If silent acquisition fails (e.g. scope change requiring re-consent), use popup
+    if (e instanceof InteractionRequiredAuthError) {
+      const response = await msalInstance.acquireTokenPopup(loginRequest);
+      return response.accessToken;
+    }
+    throw e;
+  }
 }
 
 async function graphFetch(url: string, options: RequestInit = {}): Promise<Response> {
@@ -27,13 +38,27 @@ async function graphFetch(url: string, options: RequestInit = {}): Promise<Respo
   return response;
 }
 
+/** Encode a OneDrive sharing URL into a share token for the /shares/ API */
+export function encodeSharingUrl(sharingUrl: string): string {
+  const base64 = btoa(sharingUrl);
+  const encoded = base64.replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+  return `u!${encoded}`;
+}
+
+function getBasePath(source: DataSource): string {
+  if (source.type === 'own') return APP_ROOT;
+  const token = encodeSharingUrl(source.sharingUrl);
+  return `/shares/${token}/root:`;
+}
+
 export interface OneDriveFile<T> {
   data: T;
   eTag: string | null;
 }
 
-export async function readJsonFile<T>(path: string): Promise<OneDriveFile<T> | null> {
-  const response = await graphFetch(`${APP_ROOT}/${path}:/content`);
+export async function readJsonFile<T>(path: string, source: DataSource = { type: 'own' }): Promise<OneDriveFile<T> | null> {
+  const base = getBasePath(source);
+  const response = await graphFetch(`${base}/${path}:/content`);
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`Failed to read ${path}: ${response.status} ${response.statusText}`);
@@ -43,7 +68,8 @@ export async function readJsonFile<T>(path: string): Promise<OneDriveFile<T> | n
   return { data, eTag };
 }
 
-export async function writeJsonFile<T>(path: string, data: T, expectedETag?: string | null): Promise<string | null> {
+export async function writeJsonFile<T>(path: string, data: T, expectedETag?: string | null, source: DataSource = { type: 'own' }): Promise<string | null> {
+  const base = getBasePath(source);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -51,7 +77,7 @@ export async function writeJsonFile<T>(path: string, data: T, expectedETag?: str
     headers['If-Match'] = expectedETag;
   }
 
-  const response = await graphFetch(`${APP_ROOT}/${path}:/content`, {
+  const response = await graphFetch(`${base}/${path}:/content`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(data, null, 2),
@@ -68,8 +94,9 @@ export async function writeJsonFile<T>(path: string, data: T, expectedETag?: str
   return result.eTag || null;
 }
 
-export async function deleteFile(path: string): Promise<void> {
-  const response = await graphFetch(`${APP_ROOT}/${path}`, {
+export async function deleteFile(path: string, source: DataSource = { type: 'own' }): Promise<void> {
+  const base = getBasePath(source);
+  const response = await graphFetch(`${base}/${path}`, {
     method: 'DELETE',
   });
   if (!response.ok && response.status !== 404) {
@@ -77,8 +104,9 @@ export async function deleteFile(path: string): Promise<void> {
   }
 }
 
-export async function listFolder(path: string): Promise<{ name: string; lastModifiedDateTime: string }[]> {
-  const response = await graphFetch(`${APP_ROOT}/${path}:/children`);
+export async function listFolder(path: string, source: DataSource = { type: 'own' }): Promise<{ name: string; lastModifiedDateTime: string }[]> {
+  const base = getBasePath(source);
+  const response = await graphFetch(`${base}/${path}:/children`);
   if (response.status === 404) return [];
   if (!response.ok) {
     throw new Error(`Failed to list ${path}: ${response.status}`);
@@ -88,6 +116,31 @@ export async function listFolder(path: string): Promise<{ name: string; lastModi
     name: item.name,
     lastModifiedDateTime: item.lastModifiedDateTime,
   }));
+}
+
+/** Get the driveItem ID of the app root folder (needed for creating share links) */
+export async function getAppRootItemId(): Promise<string> {
+  const response = await graphFetch('/me/drive/special/approot');
+  if (!response.ok) {
+    throw new Error(`Failed to get app root: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.id;
+}
+
+/** Create an edit sharing link on the app root folder */
+export async function createShareLink(): Promise<string> {
+  const itemId = await getAppRootItemId();
+  const response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'edit', scope: 'anonymous' }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to create share link: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.link.webUrl;
 }
 
 export class ConflictError extends Error {

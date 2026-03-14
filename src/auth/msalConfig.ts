@@ -28,9 +28,9 @@ export const msalConfig: Configuration = {
 };
 
 export const loginRequest = {
-  scopes: ['User.Read', 'Files.ReadWrite.AppFolder'],
+  scopes: ['User.Read', 'Files.ReadWrite'],
 };
 
 export const graphScopes = {
-  scopes: ['Files.ReadWrite.AppFolder'],
+  scopes: ['Files.ReadWrite'],
 };

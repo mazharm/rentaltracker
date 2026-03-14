@@ -72,7 +72,7 @@ function AppContent() {
   const styles = useStyles();
   const isAuthenticated = useIsAuthenticated();
   const { instance, inProgress } = useMsal();
-  const { setAuth, loadFromOneDrive, isLoading, error, clearError } = useStore();
+  const { setAuth, loadFromOneDrive, loadSharingConfig, isLoading, error, clearError } = useStore();
 
   useEffect(() => {
     const accounts = instance.getAllAccounts();
@@ -85,9 +85,9 @@ function AppContent() {
     if (isAuthenticated) {
       const accounts = instance.getAllAccounts();
       setAuth(true, accounts[0] ?? null);
-      loadFromOneDrive();
+      loadSharingConfig().then(() => loadFromOneDrive());
     }
-  }, [isAuthenticated, instance, setAuth, loadFromOneDrive]);
+  }, [isAuthenticated, instance, setAuth, loadSharingConfig, loadFromOneDrive]);
 
   if (inProgress !== InteractionStatus.None) {
     return (
