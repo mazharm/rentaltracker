@@ -11,6 +11,7 @@ import {
 } from '@fluentui/react-components';
 import {
   Add24Regular,
+  Building24Regular,
   DataBarVertical24Regular,
 } from '@fluentui/react-icons';
 import { useStore } from '../store/useStore';
@@ -69,6 +70,17 @@ const useStyles = makeStyles({
   sectionTitle: {
     marginBottom: '12px',
   },
+  sectionHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
+  emptyState: {
+    ...shorthands.padding('24px'),
+    textAlign: 'center',
+    marginBottom: '24px',
+  },
 });
 
 export function Dashboard() {
@@ -119,50 +131,68 @@ export function Dashboard() {
         ))}
       </div>
 
-      <Text as="h2" size={400} weight="semibold" block className={styles.sectionTitle}>
-        Properties
-      </Text>
-
-      <div className={isMobile ? styles.propertyCardsMobile : styles.propertyCards}>
-        {properties.map((property) => {
-          const lastEntry = data?.rentEntries
-            .filter((e) => e.propertyId === property.id)
-            .sort((a, b) => b.month - a.month)[0];
-
-          return (
-            <Card
-              key={property.id}
-              className={styles.propertyCard}
-              onClick={() => navigate('/properties')}
-            >
-              <CardHeader
-                header={<Text weight="semibold">{property.name}</Text>}
-                description={<Text size={200}>${property.monthlyRent.toLocaleString()}/mo</Text>}
-                action={
-                  <Badge color={property.status === 'active' ? 'success' : 'danger'} appearance="filled">
-                    {property.status}
-                  </Badge>
-                }
-              />
-              {lastEntry && (
-                <div className={styles.propertyRow}>
-                  <Text size={200}>Last: {['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][lastEntry.month]}</Text>
-                  <Badge size="small" color={lastEntry.status === 'received' ? 'success' : 'informative'}>
-                    {lastEntry.status}
-                  </Badge>
-                </div>
-              )}
-            </Card>
-          );
-        })}
+      <div className={styles.sectionHeader}>
+        <Text as="h2" size={400} weight="semibold">Properties</Text>
+        <Button icon={<Building24Regular />} size="small" onClick={() => navigate('/properties')}>
+          Manage
+        </Button>
       </div>
+
+      {properties.length === 0 ? (
+        <Card className={styles.emptyState}>
+          <Text block weight="semibold">No properties yet</Text>
+          <Text block size={200} style={{ marginBottom: 12 }}>
+            Add your first rental property to start tracking income and expenses.
+          </Text>
+          <Button icon={<Add24Regular />} appearance="primary" onClick={() => navigate('/properties')}>
+            Add Property
+          </Button>
+        </Card>
+      ) : (
+        <div className={isMobile ? styles.propertyCardsMobile : styles.propertyCards}>
+          {properties.map((property) => {
+            const lastEntry = data?.rentEntries
+              .filter((e) => e.propertyId === property.id)
+              .sort((a, b) => b.month - a.month)[0];
+
+            return (
+              <Card
+                key={property.id}
+                className={styles.propertyCard}
+                onClick={() => navigate('/properties')}
+              >
+                <CardHeader
+                  header={<Text weight="semibold">{property.name}</Text>}
+                  description={<Text size={200}>${property.monthlyRent.toLocaleString()}/mo</Text>}
+                  action={
+                    <Badge color={property.status === 'active' ? 'success' : 'danger'} appearance="filled">
+                      {property.status}
+                    </Badge>
+                  }
+                />
+                {lastEntry && (
+                  <div className={styles.propertyRow}>
+                    <Text size={200}>Last: {['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][lastEntry.month]}</Text>
+                    <Badge size="small" color={lastEntry.status === 'received' ? 'success' : 'informative'}>
+                      {lastEntry.status}
+                    </Badge>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <Text as="h2" size={400} weight="semibold" block className={styles.sectionTitle}>
         Quick Actions
       </Text>
 
       <div className={styles.actions}>
-        <Button icon={<Add24Regular />} appearance="primary" onClick={() => navigate('/expenses')}>
+        <Button icon={<Add24Regular />} appearance="primary" onClick={() => navigate('/properties')}>
+          Add Property
+        </Button>
+        <Button icon={<Add24Regular />} onClick={() => navigate('/expenses')}>
           Add Expense
         </Button>
         <Button icon={<DataBarVertical24Regular />} onClick={() => navigate('/reports')}>

@@ -127,10 +127,10 @@ const NAV_ITEMS = [
 
 const MOBILE_TABS = [
   { path: '/', label: 'Home', Icon: Home24Regular, IconFilled: Home24Filled },
+  { path: '/properties', label: 'Props', Icon: Building24Regular, IconFilled: Building24Filled },
   { path: '/income', label: 'Income', Icon: Money24Regular, IconFilled: Money24Filled },
   { path: '/expenses', label: 'Expenses', Icon: Receipt24Regular, IconFilled: Receipt24Filled },
-  { path: '/reports', label: 'Reports', Icon: DataBarVertical24Regular, IconFilled: DataBarVertical24Filled },
-  { path: '/settings', label: 'Settings', Icon: Settings24Regular, IconFilled: Settings24Filled },
+  { path: '/settings', label: 'More', Icon: Settings24Regular, IconFilled: Settings24Filled },
 ];
 
 export function Layout() {
