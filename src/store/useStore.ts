@@ -39,10 +39,11 @@ interface AppStore {
   error: string | null;
   clearError: () => void;
 
-  // Actions — Data loading
+  // Actions — Data loading & sync
   loadFromOneDrive: () => Promise<void>;
   saveConfig: () => Promise<void>;
   saveYearData: (year: number) => Promise<void>;
+  syncAfterConfigChange: () => Promise<void>;
 
   // Actions — Properties
   addProperty: (property: Omit<Property, 'id'>) => void;
@@ -197,6 +198,20 @@ export const useStore = create<AppStore>((set, get) => ({
       throw e;
     } finally {
       set({ isSyncing: false });
+    }
+  },
+
+  syncAfterConfigChange: async () => {
+    const store = get();
+    // Save config to OneDrive
+    await store.saveConfig();
+    // Re-run accrual engines so yearData reflects the config change
+    store.accrueRent();
+    store.accrueExpenses();
+    // Persist updated yearData for all loaded years
+    const { yearData } = get();
+    for (const yearStr of Object.keys(yearData)) {
+      await store.saveYearData(Number(yearStr));
     }
   },
 

@@ -34,7 +34,7 @@ interface Props {
 
 export function PropertyForm({ property, onClose }: Props) {
   const styles = useStyles();
-  const { addProperty, updateProperty, saveConfig } = useStore();
+  const { addProperty, updateProperty, syncAfterConfigChange } = useStore();
 
   const [name, setName] = useState(property?.name ?? '');
   const [address, setAddress] = useState(property?.address ?? '');
@@ -63,7 +63,7 @@ export function PropertyForm({ property, onClose }: Props) {
       addProperty(data);
     }
 
-    await saveConfig();
+    await syncAfterConfigChange();
     onClose();
   };
 

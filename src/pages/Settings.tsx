@@ -74,7 +74,7 @@ export function Settings() {
   const styles = useStyles();
   const { instance } = useMsal();
   const isMobile = useIsMobile();
-  const { config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, saveConfig } = useStore();
+  const { config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, syncAfterConfigChange } = useStore();
   const [editTemplate, setEditTemplate] = useState<RecurringExpenseTemplate | null>(null);
   const [showAddTemplate, setShowAddTemplate] = useState(false);
 
@@ -184,7 +184,7 @@ export function Settings() {
                   </Button>
                   <Button icon={<Delete24Regular />} size="small" appearance="subtle" onClick={async () => {
                     useStore.getState().deleteTemplate(t.id);
-                    await saveConfig();
+                    await syncAfterConfigChange();
                   }}>
                     Delete
                   </Button>
@@ -216,7 +216,7 @@ export function Settings() {
                     <Button icon={<Edit24Regular />} size="small" appearance="subtle" onClick={() => setEditTemplate(t)} />
                     <Button icon={<Delete24Regular />} size="small" appearance="subtle" onClick={async () => {
                       useStore.getState().deleteTemplate(t.id);
-                      await saveConfig();
+                      await syncAfterConfigChange();
                     }} />
                   </TableCell>
                 </TableRow>
@@ -265,7 +265,7 @@ export function Settings() {
                 startDate: data.startDate || new Date().toISOString().split('T')[0],
               } as Omit<RecurringExpenseTemplate, 'id'>);
             }
-            await saveConfig();
+            await syncAfterConfigChange();
             setShowAddTemplate(false);
             setEditTemplate(null);
           }}
