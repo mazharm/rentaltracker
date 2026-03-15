@@ -265,6 +265,7 @@ export function Settings() {
                           accountId: account.id,
                           driveId: account.driveId,
                           itemId: account.itemId,
+                          shareUrl: account.shareUrl,
                           label: account.label,
                         });
                       }
@@ -306,11 +307,12 @@ export function Settings() {
                   const params = new URLSearchParams(shareUrl.split('?')[1] || '');
                   const driveId = params.get('driveId') || '';
                   const itemId = params.get('itemId') || '';
-                  if (!driveId || !itemId) {
-                    alert('Invalid invite link. Please paste a valid invite link containing driveId and itemId.');
+                  const msShareUrl = params.get('shareUrl') || '';
+                  if (!driveId || !itemId || !msShareUrl) {
+                    alert('Invalid invite link. Please paste a valid invite link.');
                     return;
                   }
-                  await addSharedAccount(shareLabel, driveId, itemId);
+                  await addSharedAccount(shareLabel, driveId, itemId, msShareUrl);
                   setShowAddShared(false);
                   setShareLabel('');
                   setShareUrl('');

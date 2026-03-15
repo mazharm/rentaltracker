@@ -52,6 +52,7 @@ export function ShareInvite() {
 
   const driveId = searchParams.get('driveId') || '';
   const itemId = searchParams.get('itemId') || '';
+  const shareUrl = searchParams.get('shareUrl') || '';
 
   const [label, setLabel] = useState('');
   const [adding, setAdding] = useState(false);
@@ -67,7 +68,7 @@ export function ShareInvite() {
     }
   }, [alreadyAdded]);
 
-  if (!driveId || !itemId) {
+  if (!driveId || !itemId || !shareUrl) {
     return (
       <div className={styles.container}>
         <Card className={styles.card}>
@@ -102,7 +103,7 @@ export function ShareInvite() {
     setAdding(true);
     setError('');
     try {
-      await addSharedAccount(label.trim(), driveId, itemId);
+      await addSharedAccount(label.trim(), driveId, itemId, shareUrl);
       // Switch to the newly added account
       const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.driveId === driveId && a.itemId === itemId);
       if (newAccount) {
@@ -111,6 +112,7 @@ export function ShareInvite() {
           accountId: newAccount.id,
           driveId: newAccount.driveId,
           itemId: newAccount.itemId,
+          shareUrl: newAccount.shareUrl,
           label: newAccount.label,
         };
         // Register this user in the owner's linked_users.json

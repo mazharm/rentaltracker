@@ -43,7 +43,7 @@ interface AppStore {
   sharingConfig: SharingConfig;
   linkedUsers: LinkedUser[];
   setActiveDataSource: (source: DataSource) => Promise<void>;
-  addSharedAccount: (label: string, driveId: string, itemId: string) => Promise<void>;
+  addSharedAccount: (label: string, driveId: string, itemId: string, shareUrl: string) => Promise<void>;
   removeSharedAccount: (id: string) => Promise<void>;
   createShareLink: () => Promise<string>;
   loadSharingConfig: () => Promise<void>;
@@ -136,13 +136,14 @@ export const useStore = create<AppStore>((set, get) => ({
     await get().loadFromOneDrive();
   },
 
-  addSharedAccount: async (label, driveId, itemId) => {
+  addSharedAccount: async (label, driveId, itemId, shareUrl) => {
     const { sharingConfig } = get();
     const newAccount: SharedAccount = {
       id: uuidv4(),
       label,
       driveId,
       itemId,
+      shareUrl,
       addedAt: new Date().toISOString(),
     };
     set({
@@ -171,9 +172,9 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   createShareLink: async () => {
-    const { driveId, itemId } = await apiCreateShareLink();
+    const { driveId, itemId, shareUrl } = await apiCreateShareLink();
     const { sharingConfig } = get();
-    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?driveId=${encodeURIComponent(driveId)}&itemId=${encodeURIComponent(itemId)}`;
+    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?driveId=${encodeURIComponent(driveId)}&itemId=${encodeURIComponent(itemId)}&shareUrl=${encodeURIComponent(shareUrl)}`;
     set({ sharingConfig: { ...sharingConfig, myShareLink: inviteUrl } });
     await get().saveSharingConfig();
     return inviteUrl;
