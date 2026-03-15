@@ -175,12 +175,11 @@ export function Settings() {
               </Text>
               <Input
                 readOnly
-                value={`${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink)}`}
+                value={sharingConfig.myShareLink}
                 style={{ marginBottom: 8 }}
               />
               <Button size="small" appearance="primary" onClick={() => {
-                const inviteUrl = `${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink!)}`;
-                navigator.clipboard.writeText(inviteUrl);
+                navigator.clipboard.writeText(sharingConfig.myShareLink!);
               }}>
                 Copy Link
               </Button>
