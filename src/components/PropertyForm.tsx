@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Input,
   Button,
-  SpinButton,
   Dropdown,
   Option,
   makeStyles,
@@ -83,11 +82,10 @@ export function PropertyForm({ property, onClose }: Props) {
       </Field>
 
       <Field label="Monthly Rent">
-        <SpinButton
-          value={monthlyRent}
-          onChange={(_, d) => setMonthlyRent(d.value ?? 0)}
-          min={0}
-          step={50}
+        <Input
+          type="number"
+          value={String(monthlyRent)}
+          onChange={(_, d) => setMonthlyRent(Math.max(0, Number(d.value) || 0))}
         />
       </Field>
 
@@ -100,11 +98,10 @@ export function PropertyForm({ property, onClose }: Props) {
       </Field>
 
       <Field label="Annual Property Tax">
-        <SpinButton
-          value={taxAmount}
-          onChange={(_, d) => setTaxAmount(d.value ?? 0)}
-          min={0}
-          step={100}
+        <Input
+          type="number"
+          value={String(taxAmount)}
+          onChange={(_, d) => setTaxAmount(Math.max(0, Number(d.value) || 0))}
         />
       </Field>
 

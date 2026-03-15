@@ -11,7 +11,6 @@ import {
   TableBody,
   TableCell,
   Input,
-  SpinButton,
   Dropdown,
   Option,
   Field,
@@ -474,7 +473,7 @@ function TemplateDialog({ template, isMobile, onClose, onSave }: {
             </Dropdown>
           </Field>
           <Field label="Amount">
-            <SpinButton value={amount} onChange={(_, d) => setAmount(d.value ?? 0)} min={0} step={10} />
+            <Input type="number" value={String(amount)} onChange={(_, d) => setAmount(Math.max(0, Number(d.value) || 0))} />
           </Field>
           <Field label="Category">
             <Dropdown

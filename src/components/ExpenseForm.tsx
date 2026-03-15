@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Input,
   Button,
-  SpinButton,
   Dropdown,
   Option,
   Field,
@@ -82,11 +81,10 @@ export function ExpenseForm({ onClose }: Props) {
       </Field>
 
       <Field label="Amount" required>
-        <SpinButton
-          value={amount}
-          onChange={(_, d) => setAmount(d.value ?? 0)}
-          min={0}
-          step={10}
+        <Input
+          type="number"
+          value={String(amount)}
+          onChange={(_, d) => setAmount(Math.max(0, Number(d.value) || 0))}
         />
       </Field>
 
