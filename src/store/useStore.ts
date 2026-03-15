@@ -82,6 +82,7 @@ interface AppStore {
   // Actions — Expenses
   accrueExpenses: () => void;
   addExpense: (entry: Omit<ExpenseEntry, 'id'>) => void;
+  updateExpense: (id: string, year: number, updates: Partial<ExpenseEntry>) => void;
   deleteExpense: (id: string, year: number) => void;
 
   // Actions — Reports
@@ -456,6 +457,23 @@ export const useStore = create<AppStore>((set, get) => ({
       yearData: {
         ...yearData,
         [year]: { ...data, expenseEntries: [...data.expenseEntries, { ...entry, id: uuidv4() }] },
+      },
+    });
+  },
+
+  updateExpense: (id, year, updates) => {
+    const { yearData } = get();
+    const data = yearData[year];
+    if (!data) return;
+    set({
+      yearData: {
+        ...yearData,
+        [year]: {
+          ...data,
+          expenseEntries: data.expenseEntries.map((e) =>
+            e.id === id ? { ...e, ...updates } : e
+          ),
+        },
       },
     });
   },
