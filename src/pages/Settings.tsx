@@ -294,8 +294,8 @@ export function Settings() {
               <Field label="Label" required>
                 <Input value={shareLabel} onChange={(_, d) => setShareLabel(d.value)} placeholder="e.g., Alice's Properties" />
               </Field>
-              <Field label="Share Link" required>
-                <Input value={shareUrl} onChange={(_, d) => setShareUrl(d.value)} placeholder="Paste the OneDrive share link" />
+              <Field label="Invite Link" required>
+                <Input value={shareUrl} onChange={(_, d) => setShareUrl(d.value)} placeholder="Paste the invite link" />
               </Field>
             </DialogBody>
             <DialogActions>
@@ -304,7 +304,14 @@ export function Settings() {
                 appearance="primary"
                 disabled={!shareLabel || !shareUrl}
                 onClick={async () => {
-                  await addSharedAccount(shareLabel, shareUrl);
+                  const params = new URLSearchParams(shareUrl.split('?')[1] || '');
+                  const driveId = params.get('driveId') || '';
+                  const itemId = params.get('itemId') || '';
+                  if (!driveId || !itemId) {
+                    alert('Invalid invite link. Please paste a valid invite link containing driveId and itemId.');
+                    return;
+                  }
+                  await addSharedAccount(shareLabel, driveId, itemId);
                   setShowAddShared(false);
                   setShareLabel('');
                   setShareUrl('');
