@@ -155,10 +155,16 @@ export function Settings() {
             </Badge>
           </div>
           {user && (
-            <div className={styles.cardRow}>
-              <Text>Account</Text>
-              <Text size={200}>{user.name || user.username}</Text>
-            </div>
+            <>
+              <div className={styles.cardRow}>
+                <Text>Name</Text>
+                <Text size={200}>{user.name || '—'}</Text>
+              </div>
+              <div className={styles.cardRow}>
+                <Text>Email</Text>
+                <Text size={200}>{user.username || '—'}</Text>
+              </div>
+            </>
           )}
           {lastSyncTime && (
             <div className={styles.cardRow}>
