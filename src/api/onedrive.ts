@@ -40,9 +40,21 @@ async function graphFetch(url: string, options: RequestInit = {}): Promise<Respo
 
 function getBasePath(source: DataSource): string {
   if (source.type === 'own') return APP_ROOT;
-  // Use the /shares/ endpoint to access shared content via the Microsoft sharing URL
+  // After redeeming the share, access files via the standard drives API
+  return `/drives/${source.driveId}/items/${source.itemId}:`;
+}
+
+/**
+ * Redeem a sharing link so the current user gets access to the shared folder.
+ * Must be called once per session before using drive-based paths for shared data.
+ */
+export async function redeemShare(source: DataSource): Promise<void> {
+  if (source.type === 'own') return;
   const token = encodeSharingUrl(source.shareUrl);
-  return `/shares/${token}/root:`;
+  const response = await graphFetch(`/shares/${token}/driveItem`);
+  if (!response.ok) {
+    throw new Error(`Failed to access shared data: ${response.status} ${response.statusText}`);
+  }
 }
 
 export interface OneDriveFile<T> {

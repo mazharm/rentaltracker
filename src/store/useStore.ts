@@ -19,7 +19,7 @@ import {
   createEmptyYearData,
   DEFAULT_TEMPLATES,
 } from '../models/types';
-import { readJsonFile, createShareLink as apiCreateShareLink } from '../api/onedrive';
+import { readJsonFile, createShareLink as apiCreateShareLink, redeemShare } from '../api/onedrive';
 import { writeWithArchive } from '../api/archive';
 import { accrueRentForProperties } from '../engine/rentAccrual';
 import { accrueExpensesForTemplates } from '../engine/expenseAccrual';
@@ -219,6 +219,9 @@ export const useStore = create<AppStore>((set, get) => ({
     const { activeDataSource } = get();
     set({ isLoading: true, error: null });
     try {
+      // For shared accounts, redeem the share link first to grant access
+      await redeemShare(activeDataSource);
+
       // Load config from the active data source
       const configResult = await readJsonFile<Config>('config.json', activeDataSource);
       let config: Config;
