@@ -147,6 +147,17 @@ export interface SharedAccount {
   addedAt: string;
 }
 
+export interface LinkedUsersFile {
+  version: 1;
+  users: LinkedUser[];
+}
+
+export interface LinkedUser {
+  name: string;
+  email: string;
+  linkedAt: string;
+}
+
 export function createDefaultSharingConfig(): SharingConfig {
   return { version: 1, myShareLink: null, sharedAccounts: [] };
 }

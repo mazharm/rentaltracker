@@ -12,6 +12,8 @@ import {
   DataSource,
   SharingConfig,
   SharedAccount,
+  LinkedUser,
+  LinkedUsersFile,
   createDefaultConfig,
   createDefaultSharingConfig,
   createEmptyYearData,
@@ -39,12 +41,15 @@ interface AppStore {
   // Sharing / Multi-account
   activeDataSource: DataSource;
   sharingConfig: SharingConfig;
+  linkedUsers: LinkedUser[];
   setActiveDataSource: (source: DataSource) => Promise<void>;
   addSharedAccount: (label: string, sharingUrl: string) => Promise<void>;
   removeSharedAccount: (id: string) => Promise<void>;
   createShareLink: () => Promise<string>;
   loadSharingConfig: () => Promise<void>;
   saveSharingConfig: () => Promise<void>;
+  loadLinkedUsers: () => Promise<void>;
+  registerAsLinkedUser: (source: DataSource) => Promise<void>;
 
   // UI
   isLoading: boolean;
@@ -99,6 +104,7 @@ export const useStore = create<AppStore>((set, get) => ({
   // Sharing
   activeDataSource: { type: 'own' },
   sharingConfig: createDefaultSharingConfig(),
+  linkedUsers: [],
 
   // UI
   isLoading: false,
@@ -115,6 +121,8 @@ export const useStore = create<AppStore>((set, get) => ({
     if (result) {
       set({ sharingConfig: result.data });
     }
+    // Also load linked users (people who have accepted your share link)
+    await get().loadLinkedUsers();
   },
 
   saveSharingConfig: async () => {
@@ -165,7 +173,41 @@ export const useStore = create<AppStore>((set, get) => ({
     const { sharingConfig } = get();
     set({ sharingConfig: { ...sharingConfig, myShareLink: link } });
     await get().saveSharingConfig();
-    return link;
+    // Return the app invite URL, not the raw OneDrive link
+    return `${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(link)}`;
+  },
+
+  loadLinkedUsers: async () => {
+    // Read linked_users.json from own approot to see who has linked
+    const result = await readJsonFile<LinkedUsersFile>('linked_users.json', { type: 'own' });
+    if (result) {
+      set({ linkedUsers: result.data.users });
+    } else {
+      set({ linkedUsers: [] });
+    }
+  },
+
+  registerAsLinkedUser: async (source: DataSource) => {
+    // Write this user's info into the owner's linked_users.json via the share link
+    if (source.type !== 'shared') return;
+    const { user } = get();
+    if (!user) return;
+
+    const existing = await readJsonFile<LinkedUsersFile>('linked_users.json', source);
+    const users: LinkedUser[] = existing?.data.users ?? [];
+
+    const email = user.username || '';
+    // Don't add duplicates
+    if (users.some((u) => u.email === email)) return;
+
+    users.push({
+      name: user.name || email,
+      email,
+      linkedAt: new Date().toISOString(),
+    });
+
+    const file: LinkedUsersFile = { version: 1, users };
+    await writeWithArchive('linked_users.json', file, existing?.eTag, source);
   },
 
   // --- Data loading ---

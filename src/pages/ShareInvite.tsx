@@ -48,7 +48,7 @@ export function ShareInvite() {
   const styles = useStyles();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { addSharedAccount, setActiveDataSource, sharingConfig } = useStore();
+  const { addSharedAccount, setActiveDataSource, registerAsLinkedUser, sharingConfig } = useStore();
 
   const encodedLink = searchParams.get('link');
   const oneDriveLink = encodedLink ? decodeURIComponent(encodedLink) : '';
@@ -106,12 +106,15 @@ export function ShareInvite() {
       // Switch to the newly added account
       const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.sharingUrl === oneDriveLink);
       if (newAccount) {
-        await setActiveDataSource({
-          type: 'shared',
+        const source = {
+          type: 'shared' as const,
           accountId: newAccount.id,
           sharingUrl: newAccount.sharingUrl,
           label: newAccount.label,
-        });
+        };
+        // Register this user in the owner's linked_users.json
+        await registerAsLinkedUser(source);
+        await setActiveDataSource(source);
       }
       setDone(true);
     } catch (e) {

@@ -76,7 +76,7 @@ export function Settings() {
   const isMobile = useIsMobile();
   const {
     config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, syncAfterConfigChange,
-    sharingConfig, activeDataSource, setActiveDataSource,
+    sharingConfig, linkedUsers, activeDataSource, setActiveDataSource,
     createShareLink, addSharedAccount, removeSharedAccount,
   } = useStore();
   const [editTemplate, setEditTemplate] = useState<RecurringExpenseTemplate | null>(null);
@@ -171,20 +171,26 @@ export function Settings() {
         <Card className={styles.card}>
           {sharingConfig.myShareLink ? (
             <>
-              <div className={styles.cardRow}>
-                <Text size={200}>Share link created. Send the invite link below to another user.</Text>
-              </div>
-              <div className={styles.cardRow}>
-                <Button size="small" appearance="primary" onClick={() => {
-                  const inviteUrl = `${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink!)}`;
-                  navigator.clipboard.writeText(inviteUrl);
-                }}>
-                  Copy Invite Link
-                </Button>
-              </div>
+              <Text size={200} block style={{ marginBottom: 8 }}>
+                Send this link to another user so they can view and edit your rental data.
+              </Text>
+              <Input
+                readOnly
+                value={`${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink)}`}
+                style={{ marginBottom: 8 }}
+              />
+              <Button size="small" appearance="primary" onClick={() => {
+                const inviteUrl = `${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink!)}`;
+                navigator.clipboard.writeText(inviteUrl);
+              }}>
+                Copy Link
+              </Button>
             </>
           ) : (
-            <div className={styles.cardRow}>
+            <>
+              <Text size={200} block style={{ marginBottom: 8 }}>
+                Create a share link so another user can access your rental data.
+              </Text>
               <Button
                 appearance="primary"
                 disabled={creatingLink}
@@ -195,13 +201,37 @@ export function Settings() {
               >
                 {creatingLink ? 'Creating...' : 'Create Share Link'}
               </Button>
-            </div>
+            </>
           )}
-          <Text size={200} style={{ marginTop: 8, display: 'block' }}>
-            Share this link with another user so they can view and edit your rental data.
-          </Text>
         </Card>
       </div>
+
+      {/* Linked Accounts — people who have accepted your share link */}
+      {sharingConfig.myShareLink && (
+        <>
+          <Divider />
+          <div className={styles.section} style={{ marginTop: 24 }}>
+            <Text as="h2" size={400} weight="semibold" block style={{ marginBottom: 8 }}>
+              Linked Accounts
+            </Text>
+            {linkedUsers.length === 0 ? (
+              <Text size={200}>No one has linked to your data yet. Share your link above to invite someone.</Text>
+            ) : (
+              linkedUsers.map((lu, i) => (
+                <Card key={i} className={styles.card}>
+                  <div className={styles.cardRow}>
+                    <Text weight="semibold">{lu.name}</Text>
+                    <Text size={200}>{lu.email}</Text>
+                  </div>
+                  <div className={styles.cardRow}>
+                    <Text size={200}>Linked {new Date(lu.linkedAt).toLocaleDateString()}</Text>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </>
+      )}
 
       <Divider />
 
