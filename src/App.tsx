@@ -3,7 +3,6 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import {
   FluentProvider,
   webLightTheme,
-  webDarkTheme,
   makeStyles,
   Button,
   Text,
@@ -24,6 +23,7 @@ import { Income } from './pages/Income';
 import { Expenses } from './pages/Expenses';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
+import { ShareInvite } from './pages/ShareInvite';
 import { useStore } from './store/useStore';
 import { loginRequest } from './auth/msalConfig';
 
@@ -62,11 +62,6 @@ const useStyles = makeStyles({
     zIndex: 2000,
   },
 });
-
-function usePrefersDark(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
 
 function AppContent() {
   const styles = useStyles();
@@ -130,6 +125,7 @@ function AppContent() {
             <Route path="expenses" element={<Expenses />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="share" element={<ShareInvite />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -169,10 +165,8 @@ function LandingPage() {
 }
 
 export default function App() {
-  const isDark = usePrefersDark();
-
   return (
-    <FluentProvider theme={isDark ? webDarkTheme : webLightTheme}>
+    <FluentProvider theme={webLightTheme}>
       <AppContent />
     </FluentProvider>
   );

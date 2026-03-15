@@ -172,11 +172,14 @@ export function Settings() {
           {sharingConfig.myShareLink ? (
             <>
               <div className={styles.cardRow}>
-                <Text size={200} style={{ wordBreak: 'break-all' }}>{sharingConfig.myShareLink}</Text>
+                <Text size={200}>Share link created. Send the invite link below to another user.</Text>
               </div>
               <div className={styles.cardRow}>
-                <Button size="small" onClick={() => navigator.clipboard.writeText(sharingConfig.myShareLink!)}>
-                  Copy Link
+                <Button size="small" appearance="primary" onClick={() => {
+                  const inviteUrl = `${window.location.origin}/rentaltracker/#/share?link=${encodeURIComponent(sharingConfig.myShareLink!)}`;
+                  navigator.clipboard.writeText(inviteUrl);
+                }}>
+                  Copy Invite Link
                 </Button>
               </div>
             </>
