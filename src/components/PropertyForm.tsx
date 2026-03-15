@@ -19,6 +19,8 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: '16px',
     ...shorthands.padding('16px'),
+    overflowY: 'auto',
+    maxHeight: '80vh',
   },
   actions: {
     display: 'flex',
