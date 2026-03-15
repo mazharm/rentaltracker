@@ -19,6 +19,23 @@ describe('migrateProperty', () => {
     expect(migrated.propertyTax.annualAmounts).toEqual([{ year: 2025, amount: 5000 }]);
   });
 
+  it('handles property with neither old nor new fields', () => {
+    const bareProperty = {
+      id: 'prop-1',
+      name: 'Test',
+      address: '123 Test St',
+      rentStartDate: '2025-01-01',
+      propertyTax: { dueMonth: 4 },
+      deposit: null,
+      status: 'active' as const,
+    } as unknown as Property;
+
+    const migrated = migrateProperty(bareProperty);
+    expect(migrated.rentSchedule).toEqual([{ startMonth: '2025-01', amount: 0 }]);
+    expect(migrated.propertyTax.annualAmounts).toEqual([{ year: 2025, amount: 0 }]);
+    expect(migrated.propertyTax.dueMonth).toBe(4);
+  });
+
   it('does not overwrite new schema fields', () => {
     const newProperty: Property = {
       id: 'prop-1',

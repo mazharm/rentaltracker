@@ -58,7 +58,7 @@ export function accrueExpensesForTemplates(
   // Generate property tax entries
   for (const property of properties) {
     if (property.status !== 'active') continue;
-    if (property.propertyTax.annualAmounts.length === 0) continue;
+    if (!property.propertyTax?.annualAmounts?.length) continue;
 
     const startYear = parseLocalDate(property.rentStartDate).year;
     const currentYear = currentDate.getFullYear();
