@@ -200,6 +200,51 @@ export function getTaxForYear(annualAmounts: PropertyTaxYear[], year: number): n
   return amount;
 }
 
+// --- Migration ---
+
+/** Migrate a property from the old schema (monthlyRent, annualAmount) to the new one */
+export function migrateProperty(property: Property): Property {
+  const legacy = property as Property & {
+    monthlyRent?: number;
+    propertyTax: Property['propertyTax'] & { annualAmount?: number };
+  };
+
+  // Migrate monthlyRent → rentSchedule
+  if (!property.rentSchedule && legacy.monthlyRent !== undefined) {
+    const startMonth = property.rentStartDate
+      ? property.rentStartDate.substring(0, 7)
+      : `${new Date().getFullYear()}-01`;
+    property = {
+      ...property,
+      rentSchedule: [{ startMonth, amount: legacy.monthlyRent }],
+    };
+  }
+
+  // Migrate annualAmount → annualAmounts
+  if (!property.propertyTax.annualAmounts && legacy.propertyTax.annualAmount !== undefined) {
+    const startYear = property.rentStartDate
+      ? Number(property.rentStartDate.split('-')[0])
+      : new Date().getFullYear();
+    property = {
+      ...property,
+      propertyTax: {
+        ...property.propertyTax,
+        annualAmounts: [{ year: startYear, amount: legacy.propertyTax.annualAmount }],
+      },
+    };
+  }
+
+  return property;
+}
+
+/** Migrate all properties in a config loaded from storage */
+export function migrateConfig(config: Config): Config {
+  return {
+    ...config,
+    properties: config.properties.map(migrateProperty),
+  };
+}
+
 // --- Helpers ---
 
 export function createEmptyYearData(year: number): YearData {

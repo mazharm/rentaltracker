@@ -18,6 +18,7 @@ import {
   createDefaultSharingConfig,
   createEmptyYearData,
   DEFAULT_TEMPLATES,
+  migrateConfig,
 } from '../models/types';
 import { readJsonFile, createShareLink as apiCreateShareLink } from '../api/onedrive';
 import { writeWithArchive } from '../api/archive';
@@ -223,7 +224,7 @@ export const useStore = create<AppStore>((set, get) => ({
       let configETag: string | null = null;
 
       if (configResult) {
-        config = configResult.data;
+        config = migrateConfig(configResult.data);
         configETag = configResult.eTag;
       } else if (activeDataSource.type === 'own') {
         // First run — create default config with seed templates (own data only)
@@ -275,7 +276,7 @@ export const useStore = create<AppStore>((set, get) => ({
         const cachedYearData = sessionStorage.getItem('rt_yearData');
         if (cachedConfig && cachedYearData) {
           set({
-            config: JSON.parse(cachedConfig),
+            config: migrateConfig(JSON.parse(cachedConfig)),
             yearData: JSON.parse(cachedYearData),
             error: `Failed to load from OneDrive (using cached data): ${e instanceof Error ? e.message : String(e)}`,
           });
