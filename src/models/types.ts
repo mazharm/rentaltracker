@@ -132,7 +132,7 @@ export interface ScheduleELineItems {
 
 export type DataSource =
   | { type: 'own' }
-  | { type: 'shared'; accountId: string; sharingUrl: string; label: string };
+  | { type: 'shared'; accountId: string; driveId: string; itemId: string; label: string };
 
 export interface SharingConfig {
   version: 1;
@@ -143,7 +143,8 @@ export interface SharingConfig {
 export interface SharedAccount {
   id: string;
   label: string;
-  sharingUrl: string;
+  driveId: string;
+  itemId: string;
   addedAt: string;
 }
 

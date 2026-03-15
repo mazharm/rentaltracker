@@ -264,7 +264,8 @@ export function Settings() {
                         setActiveDataSource({
                           type: 'shared',
                           accountId: account.id,
-                          sharingUrl: account.sharingUrl,
+                          driveId: account.driveId,
+                          itemId: account.itemId,
                           label: account.label,
                         });
                       }
