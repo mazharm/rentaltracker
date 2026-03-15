@@ -239,16 +239,16 @@ export function Settings() {
         </Card>
       </div>
 
-      {/* Linked Accounts — people who have accepted your share link */}
+      {/* People with access — who has accepted your share link */}
       {sharingConfig.myShareLink && (
         <>
           <Divider />
           <div className={styles.section} style={{ marginTop: 24 }}>
             <Text as="h2" size={400} weight="semibold" block style={{ marginBottom: 8 }}>
-              Linked Accounts
+              People With Access
             </Text>
             {linkedUsers.length === 0 ? (
-              <Text size={200}>No one has linked to your data yet. Share your link above to invite someone.</Text>
+              <Text size={200}>No one has accepted your share link yet.</Text>
             ) : (
               linkedUsers.map((lu, i) => (
                 <Card key={i} className={styles.card}>
@@ -271,13 +271,13 @@ export function Settings() {
       {/* Shared Accounts */}
       <div className={styles.section} style={{ marginTop: 24 }}>
         <div className={styles.sectionHeader}>
-          <Text as="h2" size={400} weight="semibold">Shared Accounts</Text>
+          <Text as="h2" size={400} weight="semibold">Other People's Data</Text>
           <Button icon={<Add24Regular />} size="small" onClick={() => setShowAddShared(true)}>
             Add
           </Button>
         </div>
         {sharingConfig.sharedAccounts.length === 0 ? (
-          <Text size={200}>No shared accounts. Paste a share link from another user to access their data.</Text>
+          <Text size={200}>No accounts added. Paste a share link from another user to access their data.</Text>
         ) : (
           sharingConfig.sharedAccounts.map((account) => {
             const isActive = activeDataSource.type === 'shared' && activeDataSource.accountId === account.id;
