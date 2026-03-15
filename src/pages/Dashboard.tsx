@@ -18,6 +18,7 @@ import {
 } from '@fluentui/react-icons';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { getRentForMonth } from '../models/types';
 
 const useStyles = makeStyles({
   grid: {
@@ -183,7 +184,7 @@ export function Dashboard() {
               >
                 <CardHeader
                   header={<Text weight="semibold">{property.name}</Text>}
-                  description={<Text size={200}>${property.monthlyRent.toLocaleString()}/mo</Text>}
+                  description={<Text size={200}>${getRentForMonth(property.rentSchedule, currentYear, new Date().getMonth() + 1).toLocaleString()}/mo</Text>}
                   action={
                     <Badge color={property.status === 'active' ? 'success' : 'danger'} appearance="filled">
                       {property.status}

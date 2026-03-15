@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Property, YearData } from '../models/types';
+import { Property, YearData, getRentForMonth } from '../models/types';
 
 export function accrueRentForProperties(
   properties: Property[],
@@ -30,13 +30,14 @@ export function accrueRentForProperties(
           (e) => e.propertyId === property.id && e.month === month && e.year === year
         );
         if (!exists) {
+          const rentAmount = getRentForMonth(property.rentSchedule, year, month);
           yearData.rentEntries.push({
             id: uuidv4(),
             propertyId: property.id,
             month,
             year,
-            expectedAmount: property.monthlyRent,
-            actualAmount: property.monthlyRent,
+            expectedAmount: rentAmount,
+            actualAmount: rentAmount,
             status: 'accrued',
           });
         }
@@ -68,10 +69,11 @@ export function updateRentForPropertyChange(
       const isUnmodified = entry.status === 'accrued' && entry.actualAmount === entry.expectedAmount;
 
       if (isFuture && isUnmodified) {
+        const rentAmount = getRentForMonth(property.rentSchedule, entry.year, entry.month);
         return {
           ...entry,
-          expectedAmount: property.monthlyRent,
-          actualAmount: property.monthlyRent,
+          expectedAmount: rentAmount,
+          actualAmount: rentAmount,
         };
       }
       return entry;

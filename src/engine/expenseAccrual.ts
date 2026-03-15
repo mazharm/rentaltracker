@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Property, RecurringExpenseTemplate, YearData } from '../models/types';
+import { Property, RecurringExpenseTemplate, YearData, getTaxForYear } from '../models/types';
 
 /** Parse 'YYYY-MM-DD' without timezone shift */
 function parseLocalDate(dateStr: string): { year: number; month: number; day: number } {
@@ -58,12 +58,15 @@ export function accrueExpensesForTemplates(
   // Generate property tax entries
   for (const property of properties) {
     if (property.status !== 'active') continue;
-    if (property.propertyTax.annualAmount === 0) continue;
+    if (property.propertyTax.annualAmounts.length === 0) continue;
 
     const startYear = parseLocalDate(property.rentStartDate).year;
     const currentYear = currentDate.getFullYear();
 
     for (let year = startYear; year <= currentYear; year++) {
+      const taxAmount = getTaxForYear(property.propertyTax.annualAmounts, year);
+      if (taxAmount === 0) continue;
+
       if (!updated[year]) {
         updated[year] = { version: 1, year, rentEntries: [], expenseEntries: [] };
       }
@@ -77,7 +80,7 @@ export function accrueExpensesForTemplates(
           id: uuidv4(),
           propertyId: property.id,
           date: formatDate(year, property.propertyTax.dueMonth, 1),
-          amount: property.propertyTax.annualAmount,
+          amount: taxAmount,
           category: 'property_tax',
           description: `Property tax — ${property.name}`,
           isOneTime: false,
