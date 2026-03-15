@@ -124,7 +124,7 @@ export const useStore = create<AppStore>((set, get) => ({
       // Migrate old SharedAccount format (driveId/itemId) to new (shareUrl only)
       const migrated: SharingConfig = {
         ...result.data,
-        sharedAccounts: result.data.sharedAccounts.map(migrateSharedAccount),
+        sharedAccounts: (result.data.sharedAccounts ?? []).map(migrateSharedAccount),
       };
       set({ sharingConfig: migrated });
     }
@@ -142,11 +142,21 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   addSharedAccount: async (label, shareUrl) => {
+    // Prevent duplicate share URLs
+    if (get().sharingConfig.sharedAccounts.some((a) => a.shareUrl === shareUrl)) {
+      throw new Error('This shared account has already been added.');
+    }
+
     // Validate the share by resolving it first
     const testSource: DataSource = { type: 'shared', accountId: 'validation', shareUrl, label };
     await redeemShare(testSource);
 
+    // Re-read sharingConfig after the async validation to avoid stale state
     const { sharingConfig } = get();
+    // Re-check for duplicates in case another add happened during validation
+    if (sharingConfig.sharedAccounts.some((a) => a.shareUrl === shareUrl)) {
+      throw new Error('This shared account has already been added.');
+    }
     const newAccount: SharedAccount = {
       id: uuidv4(),
       label,
@@ -191,7 +201,7 @@ export const useStore = create<AppStore>((set, get) => ({
     // Read linked_users.json from own approot to see who has linked
     const result = await readJsonFile<LinkedUsersFile>('linked_users.json', { type: 'own' });
     if (result) {
-      set({ linkedUsers: result.data.users });
+      set({ linkedUsers: result.data.users ?? [] });
     } else {
       set({ linkedUsers: [] });
     }
@@ -269,10 +279,11 @@ export const useStore = create<AppStore>((set, get) => ({
 
       set({ config, configETag, yearData, yearETags, currentYear, lastSyncTime: new Date() });
 
-      // Cache in sessionStorage
+      // Cache in sessionStorage keyed by data source to avoid cross-account contamination
+      const cacheKey = activeDataSource.type === 'own' ? 'own' : activeDataSource.accountId;
       try {
-        sessionStorage.setItem('rt_config', JSON.stringify(config));
-        sessionStorage.setItem('rt_yearData', JSON.stringify(yearData));
+        sessionStorage.setItem(`rt_config_${cacheKey}`, JSON.stringify(config));
+        sessionStorage.setItem(`rt_yearData_${cacheKey}`, JSON.stringify(yearData));
       } catch {
         // sessionStorage might be full or unavailable
       }
@@ -281,10 +292,11 @@ export const useStore = create<AppStore>((set, get) => ({
       get().accrueRent();
       get().accrueExpenses();
     } catch (e) {
-      // Try to load from sessionStorage cache
+      // Try to load from sessionStorage cache for this specific data source
+      const cacheKey = activeDataSource.type === 'own' ? 'own' : activeDataSource.accountId;
       try {
-        const cachedConfig = sessionStorage.getItem('rt_config');
-        const cachedYearData = sessionStorage.getItem('rt_yearData');
+        const cachedConfig = sessionStorage.getItem(`rt_config_${cacheKey}`);
+        const cachedYearData = sessionStorage.getItem(`rt_yearData_${cacheKey}`);
         if (cachedConfig && cachedYearData) {
           set({
             config: migrateConfig(JSON.parse(cachedConfig)),

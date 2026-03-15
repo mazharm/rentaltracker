@@ -76,7 +76,7 @@ export function Settings() {
   const {
     config, isAuthenticated, user, lastSyncTime, loadFromOneDrive, syncAfterConfigChange,
     sharingConfig, linkedUsers, activeDataSource, setActiveDataSource,
-    createShareLink, addSharedAccount, removeSharedAccount,
+    createShareLink, addSharedAccount, removeSharedAccount, registerAsLinkedUser,
   } = useStore();
   const [editTemplate, setEditTemplate] = useState<RecurringExpenseTemplate | null>(null);
   const [showAddTemplate, setShowAddTemplate] = useState(false);
@@ -99,12 +99,26 @@ export function Settings() {
   const handleSignOut = async () => {
     const { clearShareCache } = await import('../api/onedrive');
     clearShareCache();
+    // Clear session storage cache to prevent cross-user data leakage
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('rt_')) keysToRemove.push(key);
+      }
+      keysToRemove.forEach((key) => sessionStorage.removeItem(key));
+    } catch {
+      // sessionStorage may be unavailable
+    }
     await instance.logoutPopup();
     useStore.setState({
       isAuthenticated: false,
       user: null,
       config: null,
       yearData: {},
+      activeDataSource: { type: 'own' },
+      sharingConfig: { version: 1, myShareLink: null, sharedAccounts: [] },
+      linkedUsers: [],
     });
   };
 
@@ -315,6 +329,20 @@ export function Settings() {
                   const msShareUrl = params.get('shareUrl') || shareUrl; // Fall back to raw URL if not an invite link
                   try {
                     await addSharedAccount(shareLabel, msShareUrl);
+                    // Register as linked user so the owner can see us (best-effort)
+                    const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.shareUrl === msShareUrl);
+                    if (newAccount) {
+                      try {
+                        await registerAsLinkedUser({
+                          type: 'shared',
+                          accountId: newAccount.id,
+                          shareUrl: newAccount.shareUrl,
+                          label: newAccount.label,
+                        });
+                      } catch {
+                        // Non-critical — don't block if registration fails
+                      }
+                    }
                     setShowAddShared(false);
                     setShareLabel('');
                     setShareUrl('');
