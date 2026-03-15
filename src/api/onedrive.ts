@@ -48,7 +48,7 @@ export function encodeSharingUrl(sharingUrl: string): string {
 function getBasePath(source: DataSource): string {
   if (source.type === 'own') return APP_ROOT;
   const token = encodeSharingUrl(source.sharingUrl);
-  return `/shares/${token}/root:`;
+  return `/shares/${token}/driveItem:`;
 }
 
 export interface OneDriveFile<T> {
