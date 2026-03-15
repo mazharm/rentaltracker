@@ -5,6 +5,8 @@ import {
   Text,
   Button,
   Badge,
+  Dropdown,
+  Option,
   makeStyles,
   tokens,
   shorthands,
@@ -89,6 +91,11 @@ export function Dashboard() {
   const isMobile = useIsMobile();
   const { config, yearData, currentYear } = useStore();
 
+  const availableYears = Object.keys(yearData)
+    .map(Number)
+    .sort((a, b) => b - a);
+  if (availableYears.length === 0) availableYears.push(currentYear);
+
   const properties = config?.properties.filter((p) => p.status === 'active') ?? [];
   const data = yearData[currentYear];
 
@@ -118,9 +125,22 @@ export function Dashboard() {
 
   return (
     <div>
-      <Text as="h1" size={600} weight="semibold" block className={styles.sectionTitle}>
-        Dashboard — {currentYear}
-      </Text>
+      <div className={styles.sectionHeader}>
+        <Text as="h1" size={600} weight="semibold">
+          Dashboard
+        </Text>
+        <Dropdown
+          value={String(currentYear)}
+          selectedOptions={[String(currentYear)]}
+          onOptionSelect={(_, d) => {
+            useStore.setState({ currentYear: Number(d.optionValue) });
+          }}
+        >
+          {availableYears.map((y) => (
+            <Option key={y} value={String(y)}>{String(y)}</Option>
+          ))}
+        </Dropdown>
+      </div>
 
       <div className={isMobile ? styles.gridMobile : styles.grid}>
         {summaryCards.map((card) => (

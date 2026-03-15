@@ -18,10 +18,11 @@ import {
   tokens,
   shorthands,
 } from '@fluentui/react-components';
-import { Add24Regular, Delete24Regular } from '@fluentui/react-icons';
+import { Add24Regular, Delete24Regular, Edit24Regular } from '@fluentui/react-icons';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { ExpenseForm } from '../components/ExpenseForm';
+import { ExpenseEditDialog } from '../components/ExpenseEditDialog';
 import { EXPENSE_CATEGORY_LABELS, ExpenseEntry } from '../models/types';
 
 const useStyles = makeStyles({
@@ -69,6 +70,7 @@ export function Expenses() {
   const { config, yearData, currentYear, deleteExpense, saveYearData } = useStore();
   const [tab, setTab] = useState<ExpenseTab>('all');
   const [showAdd, setShowAdd] = useState(false);
+  const [editExpense, setEditExpense] = useState<ExpenseEntry | null>(null);
 
   const properties = config?.properties ?? [];
   const data = yearData[currentYear];
@@ -114,7 +116,7 @@ export function Expenses() {
       {isMobile ? (
         <div>
           {filteredExpenses.map((expense) => (
-            <Card key={expense.id} className={styles.card}>
+            <Card key={expense.id} className={styles.card} onClick={() => setEditExpense(expense)}>
               <div className={styles.cardRow}>
                 <Text weight="semibold">{expense.description}</Text>
                 <Text weight="semibold">${expense.amount.toLocaleString()}</Text>
@@ -127,14 +129,16 @@ export function Expenses() {
               </div>
               <div className={styles.cardRow}>
                 <Text size={200}>{expense.date}</Text>
-                {expense.isOneTime && (
-                  <Button
-                    icon={<Delete24Regular />}
-                    size="small"
-                    appearance="subtle"
-                    onClick={() => handleDelete(expense)}
-                  />
-                )}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {expense.isOneTime && (
+                    <Button
+                      icon={<Delete24Regular />}
+                      size="small"
+                      appearance="subtle"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(expense); }}
+                    />
+                  )}
+                </div>
               </div>
             </Card>
           ))}
@@ -178,6 +182,12 @@ export function Expenses() {
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  <Button
+                    icon={<Edit24Regular />}
+                    size="small"
+                    appearance="subtle"
+                    onClick={() => setEditExpense(expense)}
+                  />
                   {expense.isOneTime && (
                     <Button
                       icon={<Delete24Regular />}
@@ -199,6 +209,14 @@ export function Expenses() {
             <ExpenseForm onClose={() => setShowAdd(false)} />
           </DialogSurface>
         </Dialog>
+      )}
+
+      {editExpense && (
+        <ExpenseEditDialog
+          expense={editExpense}
+          propertyName={getPropertyName(editExpense.propertyId)}
+          onClose={() => setEditExpense(null)}
+        />
       )}
     </div>
   );
