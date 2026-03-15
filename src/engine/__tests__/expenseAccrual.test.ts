@@ -7,9 +7,9 @@ function makeProperty(overrides: Partial<Property> = {}): Property {
     id: 'prop-1',
     name: 'Test Property',
     address: '123 Test St',
-    monthlyRent: 2000,
+    rentSchedule: [{ startMonth: '2025-01', amount: 2000 }],
     rentStartDate: '2025-01-01',
-    propertyTax: { annualAmount: 5000, dueMonth: 4 },
+    propertyTax: { annualAmounts: [{ year: 2025, amount: 5000 }], dueMonth: 4 },
     deposit: null,
     status: 'active',
     ...overrides,
@@ -85,7 +85,7 @@ describe('accrueExpensesForTemplates', () => {
   });
 
   it('generates property tax entries', () => {
-    const property = makeProperty({ propertyTax: { annualAmount: 6000, dueMonth: 10 } });
+    const property = makeProperty({ propertyTax: { annualAmounts: [{ year: 2025, amount: 6000 }], dueMonth: 10 } });
     const result = accrueExpensesForTemplates([], [property], {}, new Date('2025-06-15'));
 
     const taxEntries = result[2025].expenseEntries.filter((e) => e.category === 'property_tax');
@@ -97,11 +97,48 @@ describe('accrueExpensesForTemplates', () => {
   });
 
   it('skips property tax for zero amount', () => {
-    const property = makeProperty({ propertyTax: { annualAmount: 0, dueMonth: 4 } });
+    const property = makeProperty({ propertyTax: { annualAmounts: [{ year: 2025, amount: 0 }], dueMonth: 4 } });
     const result = accrueExpensesForTemplates([], [property], {}, new Date('2025-06-15'));
 
     const taxEntries = result[2025]?.expenseEntries.filter((e) => e.category === 'property_tax') ?? [];
     expect(taxEntries).toHaveLength(0);
+  });
+
+  it('uses correct tax amount per year', () => {
+    const property = makeProperty({
+      rentStartDate: '2025-01-01',
+      propertyTax: {
+        annualAmounts: [
+          { year: 2025, amount: 5000 },
+          { year: 2026, amount: 5500 },
+        ],
+        dueMonth: 4,
+      },
+    });
+    const result = accrueExpensesForTemplates([], [property], {}, new Date('2026-06-15'));
+
+    const tax2025 = result[2025].expenseEntries.filter((e) => e.category === 'property_tax');
+    expect(tax2025).toHaveLength(1);
+    expect(tax2025[0].amount).toBe(5000);
+
+    const tax2026 = result[2026].expenseEntries.filter((e) => e.category === 'property_tax');
+    expect(tax2026).toHaveLength(1);
+    expect(tax2026[0].amount).toBe(5500);
+  });
+
+  it('falls back to most recent year tax amount', () => {
+    const property = makeProperty({
+      rentStartDate: '2025-01-01',
+      propertyTax: {
+        annualAmounts: [{ year: 2025, amount: 5000 }],
+        dueMonth: 4,
+      },
+    });
+    const result = accrueExpensesForTemplates([], [property], {}, new Date('2026-06-15'));
+
+    const tax2026 = result[2026].expenseEntries.filter((e) => e.category === 'property_tax');
+    expect(tax2026).toHaveLength(1);
+    expect(tax2026[0].amount).toBe(5000); // falls back to 2025 amount
   });
 
   it('skips inactive properties for templates and tax', () => {

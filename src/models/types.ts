@@ -4,14 +4,24 @@ export interface Config {
   recurringExpenseTemplates: RecurringExpenseTemplate[];
 }
 
+export interface RentPeriod {
+  startMonth: string; // 'YYYY-MM' format — when this rent amount takes effect
+  amount: number;
+}
+
+export interface PropertyTaxYear {
+  year: number;
+  amount: number;
+}
+
 export interface Property {
   id: string;
   name: string;
   address: string;
-  monthlyRent: number;
+  rentSchedule: RentPeriod[]; // sorted by startMonth ascending
   rentStartDate: string;
   propertyTax: {
-    annualAmount: number;
+    annualAmounts: PropertyTaxYear[];
     dueMonth: number;
   };
   deposit: Deposit | null;
@@ -160,6 +170,34 @@ export interface LinkedUser {
 
 export function createDefaultSharingConfig(): SharingConfig {
   return { version: 1, myShareLink: null, sharedAccounts: [] };
+}
+
+// --- Rent schedule helpers ---
+
+/** Get the rent amount for a specific month from the schedule */
+export function getRentForMonth(rentSchedule: RentPeriod[], year: number, month: number): number {
+  const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
+  let amount = 0;
+  for (const period of rentSchedule) {
+    if (period.startMonth <= targetMonth) {
+      amount = period.amount;
+    } else {
+      break;
+    }
+  }
+  return amount;
+}
+
+/** Get the property tax amount for a specific year */
+export function getTaxForYear(annualAmounts: PropertyTaxYear[], year: number): number {
+  // Find exact year match, or fall back to the most recent year before it
+  let amount = 0;
+  for (const entry of annualAmounts) {
+    if (entry.year <= year) {
+      amount = entry.amount;
+    }
+  }
+  return amount;
 }
 
 // --- Helpers ---

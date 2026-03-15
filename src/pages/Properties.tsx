@@ -20,7 +20,7 @@ import { Add24Regular, Edit24Regular } from '@fluentui/react-icons';
 import { useStore } from '../store/useStore';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { PropertyForm } from '../components/PropertyForm';
-import { Property } from '../models/types';
+import { Property, getRentForMonth, getTaxForYear } from '../models/types';
 
 const useStyles = makeStyles({
   header: {
@@ -78,7 +78,7 @@ export function Properties() {
               />
               <div className={styles.cardRow}>
                 <Text size={200}>Rent</Text>
-                <Text>${property.monthlyRent.toLocaleString()}/mo</Text>
+                <Text>${getRentForMonth(property.rentSchedule, new Date().getFullYear(), new Date().getMonth() + 1).toLocaleString()}/mo</Text>
               </div>
               <div className={styles.cardRow}>
                 <Text size={200}>Address</Text>
@@ -114,7 +114,7 @@ export function Properties() {
               <TableRow key={property.id}>
                 <TableCell>{property.name}</TableCell>
                 <TableCell>{property.address}</TableCell>
-                <TableCell>${property.monthlyRent.toLocaleString()}</TableCell>
+                <TableCell>${getRentForMonth(property.rentSchedule, new Date().getFullYear(), new Date().getMonth() + 1).toLocaleString()}</TableCell>
                 <TableCell>
                   <Badge color={property.status === 'active' ? 'success' : 'danger'} appearance="filled">
                     {property.status}
@@ -123,7 +123,7 @@ export function Properties() {
                 <TableCell>
                   {property.deposit ? `$${property.deposit.amount.toLocaleString()}` : '—'}
                 </TableCell>
-                <TableCell>${property.propertyTax.annualAmount.toLocaleString()}/yr</TableCell>
+                <TableCell>${getTaxForYear(property.propertyTax.annualAmounts, new Date().getFullYear()).toLocaleString()}/yr</TableCell>
                 <TableCell>
                   <Button
                     icon={<Edit24Regular />}

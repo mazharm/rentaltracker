@@ -7,9 +7,9 @@ function makeProperty(overrides: Partial<Property> = {}): Property {
     id: 'prop-1',
     name: 'Test Property',
     address: '123 Test St',
-    monthlyRent: 2000,
+    rentSchedule: [{ startMonth: '2025-01', amount: 2000 }],
     rentStartDate: '2025-01-01',
-    propertyTax: { annualAmount: 5000, dueMonth: 4 },
+    propertyTax: { annualAmounts: [{ year: 2025, amount: 5000 }], dueMonth: 4 },
     deposit: null,
     status: 'active',
     ...overrides,
@@ -83,11 +83,33 @@ describe('accrueRentForProperties', () => {
     expect(entries.filter((e) => e.propertyId === 'a')).toHaveLength(4);
     expect(entries.filter((e) => e.propertyId === 'b')).toHaveLength(2);
   });
+
+  it('uses correct rent amount from schedule for each month', () => {
+    const property = makeProperty({
+      rentStartDate: '2025-01-01',
+      rentSchedule: [
+        { startMonth: '2025-01', amount: 2000 },
+        { startMonth: '2025-04', amount: 2200 },
+      ],
+    });
+    const result = accrueRentForProperties([property], {}, new Date('2025-06-15'));
+
+    const entries = result[2025].rentEntries.sort((a, b) => a.month - b.month);
+    expect(entries).toHaveLength(6);
+    // Jan-Mar: $2000
+    expect(entries[0].expectedAmount).toBe(2000);
+    expect(entries[1].expectedAmount).toBe(2000);
+    expect(entries[2].expectedAmount).toBe(2000);
+    // Apr-Jun: $2200
+    expect(entries[3].expectedAmount).toBe(2200);
+    expect(entries[4].expectedAmount).toBe(2200);
+    expect(entries[5].expectedAmount).toBe(2200);
+  });
 });
 
 describe('updateRentForPropertyChange', () => {
   it('updates future unmodified entries when rent changes', () => {
-    const property = makeProperty({ monthlyRent: 2500 });
+    const property = makeProperty({ rentSchedule: [{ startMonth: '2025-01', amount: 2500 }] });
     const yearData: Record<number, YearData> = {
       2025: {
         version: 1,
