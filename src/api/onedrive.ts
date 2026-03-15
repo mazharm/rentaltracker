@@ -50,15 +50,23 @@ export function encodeSharingUrl(sharingUrl: string): string {
 const resolvedShares: Record<string, { driveId: string; itemId: string }> = {};
 
 /**
- * Resolve a sharing URL from the current user's perspective.
+ * Resolve a sharing URL or share token from the current user's perspective.
  * This establishes delegated access and caches the driveId/itemId for file operations.
  * Must be called before any file operations on a shared data source.
+ *
+ * The shareUrl may be either:
+ * - A share token (starts with "u!" — from Graph API's shareId field)
+ * - A raw sharing URL (legacy — will be base64url-encoded into a token)
  */
 export async function redeemShare(source: DataSource): Promise<void> {
   if (source.type === 'own') return;
   if (resolvedShares[source.shareUrl]) return; // Already resolved this session
 
-  const token = encodeSharingUrl(source.shareUrl);
+  // If it already looks like a share token (starts with "u!"), use it directly.
+  // Otherwise, encode the raw URL into a token.
+  const token = source.shareUrl.startsWith('u!')
+    ? source.shareUrl
+    : encodeSharingUrl(source.shareUrl);
   const response = await graphFetch(`/shares/${token}/driveItem`);
   if (!response.ok) {
     const text = await response.text().catch(() => '');
@@ -189,9 +197,16 @@ export async function createShareLink(): Promise<string> {
   }
 
   const data = await response.json();
+  // Prefer the shareId token (works directly with /shares/ API) over
+  // the webUrl (which requires manual base64url encoding and can break
+  // when Microsoft changes the URL format).
+  const shareId: string | undefined = data.shareId ?? data.link?.shareId;
+  if (shareId) {
+    return shareId;
+  }
   const shareUrl = data.link?.webUrl;
   if (!shareUrl) {
-    throw new Error('Share link created but no webUrl returned');
+    throw new Error('Share link created but no shareId or webUrl returned');
   }
   return shareUrl;
 }
