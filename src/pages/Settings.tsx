@@ -97,6 +97,8 @@ export function Settings() {
   };
 
   const handleSignOut = async () => {
+    const { clearShareCache } = await import('../api/onedrive');
+    clearShareCache();
     await instance.logoutPopup();
     useStore.setState({
       isAuthenticated: false,
@@ -263,8 +265,6 @@ export function Settings() {
                         await setActiveDataSource({
                           type: 'shared',
                           accountId: account.id,
-                          driveId: account.driveId,
-                          itemId: account.itemId,
                           shareUrl: account.shareUrl,
                           label: account.label,
                         });
@@ -310,19 +310,17 @@ export function Settings() {
                 appearance="primary"
                 disabled={!shareLabel || !shareUrl}
                 onClick={async () => {
+                  // Extract the OneDrive share URL from the invite link
                   const params = new URLSearchParams(shareUrl.split('?')[1] || '');
-                  const driveId = params.get('driveId') || '';
-                  const itemId = params.get('itemId') || '';
-                  const msShareUrl = params.get('shareUrl') || '';
-                  if (!driveId || !itemId || !msShareUrl) {
-                    const missing = [!driveId && 'driveId', !itemId && 'itemId', !msShareUrl && 'shareUrl'].filter(Boolean).join(', ');
-                    alert(`Invalid invite link — missing ${missing}. Please paste the full invite link from the account owner.`);
-                    return;
+                  const msShareUrl = params.get('shareUrl') || shareUrl; // Fall back to raw URL if not an invite link
+                  try {
+                    await addSharedAccount(shareLabel, msShareUrl);
+                    setShowAddShared(false);
+                    setShareLabel('');
+                    setShareUrl('');
+                  } catch (e) {
+                    alert(`Failed to add account: ${e instanceof Error ? e.message : 'Invalid share link'}`);
                   }
-                  await addSharedAccount(shareLabel, driveId, itemId, msShareUrl);
-                  setShowAddShared(false);
-                  setShareLabel('');
-                  setShareUrl('');
                 }}
               >
                 Add

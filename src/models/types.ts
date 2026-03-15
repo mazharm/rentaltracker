@@ -142,7 +142,7 @@ export interface ScheduleELineItems {
 
 export type DataSource =
   | { type: 'own' }
-  | { type: 'shared'; accountId: string; driveId: string; itemId: string; shareUrl: string; label: string };
+  | { type: 'shared'; accountId: string; shareUrl: string; label: string };
 
 export interface SharingConfig {
   version: 1;
@@ -153,10 +153,20 @@ export interface SharingConfig {
 export interface SharedAccount {
   id: string;
   label: string;
-  driveId: string;
-  itemId: string;
   shareUrl: string;
   addedAt: string;
+}
+
+/** Migrate old SharedAccount format (with driveId/itemId) to new (shareUrl only) */
+export function migrateSharedAccount(account: SharedAccount): SharedAccount {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const legacy = account as any;
+  return {
+    id: account.id,
+    label: account.label,
+    shareUrl: legacy.shareUrl || '',
+    addedAt: account.addedAt,
+  };
 }
 
 export interface LinkedUsersFile {

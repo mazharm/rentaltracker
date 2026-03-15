@@ -14,6 +14,7 @@ import {
   shorthands,
 } from '@fluentui/react-components';
 import { useStore } from '../store/useStore';
+import { DataSource } from '../models/types';
 
 const useStyles = makeStyles({
   container: {
@@ -50,8 +51,6 @@ export function ShareInvite() {
   const navigate = useNavigate();
   const { addSharedAccount, setActiveDataSource, registerAsLinkedUser, sharingConfig } = useStore();
 
-  const driveId = searchParams.get('driveId') || '';
-  const itemId = searchParams.get('itemId') || '';
   const shareUrl = searchParams.get('shareUrl') || '';
 
   const [label, setLabel] = useState('');
@@ -59,8 +58,7 @@ export function ShareInvite() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
 
-  // Check if this drive/item combo is already added
-  const alreadyAdded = sharingConfig.sharedAccounts.some((a) => a.driveId === driveId && a.itemId === itemId);
+  const alreadyAdded = sharingConfig.sharedAccounts.some((a) => a.shareUrl === shareUrl);
 
   useEffect(() => {
     if (alreadyAdded) {
@@ -68,7 +66,7 @@ export function ShareInvite() {
     }
   }, [alreadyAdded]);
 
-  if (!driveId || !itemId || !shareUrl) {
+  if (!shareUrl) {
     return (
       <div className={styles.container}>
         <Card className={styles.card}>
@@ -103,20 +101,21 @@ export function ShareInvite() {
     setAdding(true);
     setError('');
     try {
-      await addSharedAccount(label.trim(), driveId, itemId, shareUrl);
-      // Switch to the newly added account
-      const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.driveId === driveId && a.itemId === itemId);
+      await addSharedAccount(label.trim(), shareUrl);
+      const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.shareUrl === shareUrl);
       if (newAccount) {
-        const source = {
-          type: 'shared' as const,
+        const source: DataSource = {
+          type: 'shared',
           accountId: newAccount.id,
-          driveId: newAccount.driveId,
-          itemId: newAccount.itemId,
           shareUrl: newAccount.shareUrl,
           label: newAccount.label,
         };
-        // Register this user in the owner's linked_users.json
-        await registerAsLinkedUser(source);
+        // Register this user in the owner's linked_users.json (best-effort)
+        try {
+          await registerAsLinkedUser(source);
+        } catch {
+          // Non-critical — don't block acceptance if registration fails
+        }
         await setActiveDataSource(source);
       }
       setDone(true);

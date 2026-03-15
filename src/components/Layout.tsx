@@ -169,8 +169,6 @@ export function Layout() {
         await setActiveDataSource({
           type: 'shared',
           accountId: account.id,
-          driveId: account.driveId,
-          itemId: account.itemId,
           shareUrl: account.shareUrl,
           label: account.label,
         });

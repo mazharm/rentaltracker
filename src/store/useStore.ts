@@ -19,6 +19,7 @@ import {
   createEmptyYearData,
   DEFAULT_TEMPLATES,
   migrateConfig,
+  migrateSharedAccount,
 } from '../models/types';
 import { readJsonFile, createShareLink as apiCreateShareLink, redeemShare } from '../api/onedrive';
 import { writeWithArchive } from '../api/archive';
@@ -44,7 +45,7 @@ interface AppStore {
   sharingConfig: SharingConfig;
   linkedUsers: LinkedUser[];
   setActiveDataSource: (source: DataSource) => Promise<void>;
-  addSharedAccount: (label: string, driveId: string, itemId: string, shareUrl: string) => Promise<void>;
+  addSharedAccount: (label: string, shareUrl: string) => Promise<void>;
   removeSharedAccount: (id: string) => Promise<void>;
   createShareLink: () => Promise<string>;
   loadSharingConfig: () => Promise<void>;
@@ -118,12 +119,15 @@ export const useStore = create<AppStore>((set, get) => ({
   // --- Sharing actions ---
 
   loadSharingConfig: async () => {
-    // Always read from own approot — sharing config is per-user
     const result = await readJsonFile<SharingConfig>('sharing.json', { type: 'own' });
     if (result) {
-      set({ sharingConfig: result.data });
+      // Migrate old SharedAccount format (driveId/itemId) to new (shareUrl only)
+      const migrated: SharingConfig = {
+        ...result.data,
+        sharedAccounts: result.data.sharedAccounts.map(migrateSharedAccount),
+      };
+      set({ sharingConfig: migrated });
     }
-    // Also load linked users (people who have accepted your share link)
     await get().loadLinkedUsers();
   },
 
@@ -137,13 +141,15 @@ export const useStore = create<AppStore>((set, get) => ({
     await get().loadFromOneDrive();
   },
 
-  addSharedAccount: async (label, driveId, itemId, shareUrl) => {
+  addSharedAccount: async (label, shareUrl) => {
+    // Validate the share by resolving it first
+    const testSource: DataSource = { type: 'shared', accountId: 'validation', shareUrl, label };
+    await redeemShare(testSource);
+
     const { sharingConfig } = get();
     const newAccount: SharedAccount = {
       id: uuidv4(),
       label,
-      driveId,
-      itemId,
       shareUrl,
       addedAt: new Date().toISOString(),
     };
@@ -173,9 +179,9 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   createShareLink: async () => {
-    const { driveId, itemId, shareUrl } = await apiCreateShareLink();
+    const shareUrl = await apiCreateShareLink();
     const { sharingConfig } = get();
-    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?driveId=${encodeURIComponent(driveId)}&itemId=${encodeURIComponent(itemId)}&shareUrl=${encodeURIComponent(shareUrl)}`;
+    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?shareUrl=${encodeURIComponent(shareUrl)}`;
     set({ sharingConfig: { ...sharingConfig, myShareLink: inviteUrl } });
     await get().saveSharingConfig();
     return inviteUrl;

@@ -17,7 +17,6 @@ async function getAccessToken(): Promise<string> {
     });
     return response.accessToken;
   } catch (e) {
-    // If silent acquisition fails (e.g. scope change requiring re-consent), use popup
     if (e instanceof InteractionRequiredAuthError) {
       const response = await msalInstance.acquireTokenPopup(loginRequest);
       return response.accessToken;
@@ -38,23 +37,58 @@ async function graphFetch(url: string, options: RequestInit = {}): Promise<Respo
   return response;
 }
 
-function getBasePath(source: DataSource): string {
-  if (source.type === 'own') return APP_ROOT;
-  // After redeeming the share, access files via the standard drives API
-  return `/drives/${source.driveId}/items/${source.itemId}:`;
+/** Encode a OneDrive sharing URL into a share token for the /shares/ API */
+export function encodeSharingUrl(sharingUrl: string): string {
+  const base64 = btoa(sharingUrl);
+  return 'u!' + base64.replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
 }
 
+// --- Share resolution cache ---
+// After resolving a share URL via /shares/{token}/driveItem, the accessing user
+// gets delegated permissions on the shared folder. We cache the resolved
+// driveId/itemId so we can construct standard /drives/ paths.
+const resolvedShares: Record<string, { driveId: string; itemId: string }> = {};
+
 /**
- * Redeem a sharing link so the current user gets access to the shared folder.
- * Must be called once per session before using drive-based paths for shared data.
+ * Resolve a sharing URL from the current user's perspective.
+ * This establishes delegated access and caches the driveId/itemId for file operations.
+ * Must be called before any file operations on a shared data source.
  */
 export async function redeemShare(source: DataSource): Promise<void> {
   if (source.type === 'own') return;
+  if (resolvedShares[source.shareUrl]) return; // Already resolved this session
+
   const token = encodeSharingUrl(source.shareUrl);
   const response = await graphFetch(`/shares/${token}/driveItem`);
   if (!response.ok) {
-    throw new Error(`Failed to access shared data: ${response.status} ${response.statusText}`);
+    const text = await response.text().catch(() => '');
+    throw new Error(`Failed to access shared data (${response.status}): ${text || response.statusText}`);
   }
+  const data = await response.json();
+  if (!data.parentReference?.driveId || !data.id) {
+    throw new Error('Shared item resolved but missing driveId or itemId in response');
+  }
+  resolvedShares[source.shareUrl] = {
+    driveId: data.parentReference.driveId,
+    itemId: data.id,
+  };
+}
+
+/** Clear the share resolution cache (e.g., on sign-out) */
+export function clearShareCache(): void {
+  for (const key of Object.keys(resolvedShares)) {
+    delete resolvedShares[key];
+  }
+}
+
+function getBasePath(source: DataSource): string {
+  if (source.type === 'own') return APP_ROOT;
+
+  const resolved = resolvedShares[source.shareUrl];
+  if (!resolved) {
+    throw new Error('Share not resolved. Call redeemShare() before accessing shared files.');
+  }
+  return `/drives/${resolved.driveId}/items/${resolved.itemId}:`;
 }
 
 export interface OneDriveFile<T> {
@@ -124,39 +158,42 @@ export async function listFolder(path: string, source: DataSource = { type: 'own
   }));
 }
 
-/** Get the driveItem info for the app root folder */
-export async function getAppRootInfo(): Promise<{ driveId: string; itemId: string }> {
-  const response = await graphFetch('/me/drive/special/approot');
-  if (!response.ok) {
-    throw new Error(`Failed to get app root: ${response.status}`);
+/** Create an edit sharing link on the app root folder */
+export async function createShareLink(): Promise<string> {
+  // Get the app root folder's itemId
+  const appRootResponse = await graphFetch('/me/drive/special/approot');
+  if (!appRootResponse.ok) {
+    throw new Error(`Failed to get app root: ${appRootResponse.status}`);
   }
-  const data = await response.json();
-  return { driveId: data.parentReference.driveId, itemId: data.id };
-}
+  const appRoot = await appRootResponse.json();
+  const itemId = appRoot.id;
 
-/** Encode a Microsoft sharing URL into a sharing token for the /shares/ endpoint */
-export function encodeSharingUrl(sharingUrl: string): string {
-  const base64 = btoa(sharingUrl);
-  return 'u!' + base64.replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
-}
-
-/** Create an edit sharing link on the app root folder and return drive coordinates + sharing URL */
-export async function createShareLink(): Promise<{ driveId: string; itemId: string; shareUrl: string }> {
-  const { driveId, itemId } = await getAppRootInfo();
-  const response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
+  // Create an edit link (try edit first, fall back to view for consumer accounts)
+  let response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'edit', scope: 'anonymous' }),
   });
+
+  if (!response.ok) {
+    // Fall back to view-only link
+    response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'view', scope: 'anonymous' }),
+    });
+  }
+
   if (!response.ok) {
     throw new Error(`Failed to create share link: ${response.status}`);
   }
+
   const data = await response.json();
   const shareUrl = data.link?.webUrl;
   if (!shareUrl) {
     throw new Error('Share link created but no webUrl returned');
   }
-  return { driveId, itemId, shareUrl };
+  return shareUrl;
 }
 
 export class ConflictError extends Error {
