@@ -175,7 +175,8 @@ export function createDefaultSharingConfig(): SharingConfig {
 // --- Rent schedule helpers ---
 
 /** Get the rent amount for a specific month from the schedule */
-export function getRentForMonth(rentSchedule: RentPeriod[], year: number, month: number): number {
+export function getRentForMonth(rentSchedule: RentPeriod[] | undefined, year: number, month: number): number {
+  if (!rentSchedule || rentSchedule.length === 0) return 0;
   const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
   let amount = 0;
   for (const period of rentSchedule) {
@@ -189,7 +190,8 @@ export function getRentForMonth(rentSchedule: RentPeriod[], year: number, month:
 }
 
 /** Get the property tax amount for a specific year */
-export function getTaxForYear(annualAmounts: PropertyTaxYear[], year: number): number {
+export function getTaxForYear(annualAmounts: PropertyTaxYear[] | undefined, year: number): number {
+  if (!annualAmounts || annualAmounts.length === 0) return 0;
   // Find exact year match, or fall back to the most recent year before it
   let amount = 0;
   for (const entry of annualAmounts) {
@@ -198,6 +200,49 @@ export function getTaxForYear(annualAmounts: PropertyTaxYear[], year: number): n
     }
   }
   return amount;
+}
+
+// --- Migration ---
+
+/** Migrate a property from the old schema (monthlyRent, annualAmount) to the new one */
+export function migrateProperty(property: Property): Property {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const legacy = property as any;
+  let migrated = { ...property };
+
+  // Ensure rentSchedule exists
+  if (!migrated.rentSchedule) {
+    const amount = legacy.monthlyRent ?? 0;
+    const startMonth = migrated.rentStartDate
+      ? migrated.rentStartDate.substring(0, 7)
+      : `${new Date().getFullYear()}-01`;
+    migrated.rentSchedule = [{ startMonth, amount }];
+  }
+
+  // Ensure propertyTax.annualAmounts exists
+  if (!migrated.propertyTax) {
+    migrated.propertyTax = { annualAmounts: [], dueMonth: 1 };
+  }
+  if (!migrated.propertyTax.annualAmounts) {
+    const amount = legacy.propertyTax?.annualAmount ?? 0;
+    const startYear = migrated.rentStartDate
+      ? Number(migrated.rentStartDate.split('-')[0])
+      : new Date().getFullYear();
+    migrated.propertyTax = {
+      ...migrated.propertyTax,
+      annualAmounts: [{ year: startYear, amount }],
+    };
+  }
+
+  return migrated;
+}
+
+/** Migrate all properties in a config loaded from storage */
+export function migrateConfig(config: Config): Config {
+  return {
+    ...config,
+    properties: config.properties.map(migrateProperty),
+  };
 }
 
 // --- Helpers ---
