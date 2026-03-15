@@ -44,42 +44,78 @@ export function encodeSharingUrl(sharingUrl: string): string {
 }
 
 // --- Share resolution cache ---
-// After resolving a share URL via /shares/{token}/driveItem, the accessing user
-// gets delegated permissions on the shared folder. We cache the resolved
-// driveId/itemId so we can construct standard /drives/ paths.
 const resolvedShares: Record<string, { driveId: string; itemId: string }> = {};
 
 /**
- * Resolve a sharing URL or share token from the current user's perspective.
- * This establishes delegated access and caches the driveId/itemId for file operations.
- * Must be called before any file operations on a shared data source.
+ * Resolve a shared data source and cache the driveId/itemId for file operations.
  *
- * The shareUrl may be either:
- * - A share token (starts with "u!" — from Graph API's shareId field)
- * - A raw sharing URL (legacy — will be base64url-encoded into a token)
+ * Strategy (in order):
+ * 1. If the DataSource already has driveId/itemId, try direct access.
+ * 2. If a shareUrl is present, try the /shares/ API with multiple token formats.
+ * 3. Cache whichever succeeds so subsequent file operations use /drives/ paths.
  */
 export async function redeemShare(source: DataSource): Promise<void> {
   if (source.type === 'own') return;
   if (resolvedShares[source.shareUrl]) return; // Already resolved this session
 
-  // If it already looks like a share token (starts with "u!"), use it directly.
-  // Otherwise, encode the raw URL into a token.
-  const token = source.shareUrl.startsWith('u!')
-    ? source.shareUrl
-    : encodeSharingUrl(source.shareUrl);
-  const response = await graphFetch(`/shares/${token}/driveItem`);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Failed to access shared data (${response.status}): ${text || response.statusText}`);
+  // Strategy 1: If driveId/itemId are provided directly, verify access
+  if (source.driveId && source.itemId) {
+    const verifyResponse = await graphFetch(
+      `/drives/${source.driveId}/items/${source.itemId}`
+    );
+    if (verifyResponse.ok) {
+      resolvedShares[source.shareUrl] = {
+        driveId: source.driveId,
+        itemId: source.itemId,
+      };
+      return;
+    }
+    // Direct access didn't work — fall through to /shares/ redemption
   }
-  const data = await response.json();
-  if (!data.parentReference?.driveId || !data.id) {
-    throw new Error('Shared item resolved but missing driveId or itemId in response');
+
+  // Strategy 2: Try the /shares/ API to redeem the share and get driveId/itemId
+  if (source.shareUrl) {
+    const shareErrors: string[] = [];
+
+    // Build a list of tokens to try
+    const tokens: string[] = [];
+    // If it already looks like a share token, use it directly
+    if (source.shareUrl.startsWith('u!')) {
+      tokens.push(source.shareUrl);
+    }
+    // Always try encoding the URL
+    if (!source.shareUrl.startsWith('u!')) {
+      tokens.push(encodeSharingUrl(source.shareUrl));
+    }
+
+    for (const token of tokens) {
+      const response = await graphFetch(`/shares/${token}/driveItem`, {
+        headers: { 'Prefer': 'redeemSharingLink' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.parentReference?.driveId && data.id) {
+          resolvedShares[source.shareUrl] = {
+            driveId: data.parentReference.driveId,
+            itemId: data.id,
+          };
+          return;
+        }
+      }
+      const text = await response.text().catch(() => '');
+      shareErrors.push(`Token ${token.substring(0, 20)}...: ${response.status} ${text.substring(0, 100)}`);
+    }
+
+    // If /shares/ failed but we have driveId/itemId, we already tried those above.
+    // Provide a detailed error.
+    throw new Error(
+      `Failed to access shared data. ` +
+      (source.driveId ? `Direct access to drive also failed. ` : '') +
+      `Share API errors: ${shareErrors.join('; ')}`
+    );
   }
-  resolvedShares[source.shareUrl] = {
-    driveId: data.parentReference.driveId,
-    itemId: data.id,
-  };
+
+  throw new Error('Shared data source has no shareUrl or driveId/itemId');
 }
 
 /** Clear the share resolution cache (e.g., on sign-out) */
@@ -166,16 +202,38 @@ export async function listFolder(path: string, source: DataSource = { type: 'own
   }));
 }
 
-/** Create an edit sharing link on the app root folder */
-export async function createShareLink(): Promise<string> {
-  // Get the app root folder's itemId
+/**
+ * Create an edit sharing link on the app root folder.
+ * Returns an object with the shareUrl (or shareId token), driveId, and itemId.
+ */
+export async function createShareLink(): Promise<{ shareUrl: string; driveId: string; itemId: string }> {
+  // Get the app root folder's drive info
   const appRootResponse = await graphFetch('/me/drive/special/approot');
   if (!appRootResponse.ok) {
     throw new Error(`Failed to get app root: ${appRootResponse.status}`);
   }
   const appRoot = await appRootResponse.json();
   const itemId = appRoot.id;
+  const driveId = appRoot.parentReference?.driveId;
 
+  if (!driveId) {
+    // Fallback: get driveId from /me/drive
+    const driveResponse = await graphFetch('/me/drive');
+    if (!driveResponse.ok) {
+      throw new Error(`Failed to get drive info: ${driveResponse.status}`);
+    }
+    const drive = await driveResponse.json();
+    if (!drive.id) {
+      throw new Error('Could not determine driveId');
+    }
+    // Use drive.id as driveId
+    return await createShareLinkWithDrive(itemId, drive.id);
+  }
+
+  return await createShareLinkWithDrive(itemId, driveId);
+}
+
+async function createShareLinkWithDrive(itemId: string, driveId: string): Promise<{ shareUrl: string; driveId: string; itemId: string }> {
   // Create an edit link (try edit first, fall back to view for consumer accounts)
   let response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
     method: 'POST',
@@ -197,18 +255,17 @@ export async function createShareLink(): Promise<string> {
   }
 
   const data = await response.json();
-  // Prefer the shareId token (works directly with /shares/ API) over
-  // the webUrl (which requires manual base64url encoding and can break
-  // when Microsoft changes the URL format).
+  console.log('[RentalTracker] createLink response keys:', Object.keys(data), 'link keys:', data.link ? Object.keys(data.link) : 'N/A');
+
+  // Prefer shareId (pre-computed token for /shares/ API)
   const shareId: string | undefined = data.shareId ?? data.link?.shareId;
-  if (shareId) {
-    return shareId;
-  }
-  const shareUrl = data.link?.webUrl;
+  const shareUrl = shareId || data.link?.webUrl || '';
+
   if (!shareUrl) {
     throw new Error('Share link created but no shareId or webUrl returned');
   }
-  return shareUrl;
+
+  return { shareUrl, driveId, itemId };
 }
 
 export class ConflictError extends Error {

@@ -200,11 +200,24 @@ export function Settings() {
                 value={sharingConfig.myShareLink}
                 style={{ marginBottom: 8 }}
               />
-              <Button size="small" appearance="primary" onClick={() => {
-                navigator.clipboard.writeText(sharingConfig.myShareLink!);
-              }}>
-                Copy Link
-              </Button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <Button size="small" appearance="primary" onClick={() => {
+                  navigator.clipboard.writeText(sharingConfig.myShareLink!);
+                }}>
+                  Copy Link
+                </Button>
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  disabled={creatingLink}
+                  onClick={async () => {
+                    setCreatingLink(true);
+                    try { await createShareLink(); } finally { setCreatingLink(false); }
+                  }}
+                >
+                  {creatingLink ? 'Regenerating...' : 'Regenerate'}
+                </Button>
+              </div>
             </>
           ) : (
             <>
@@ -287,6 +300,8 @@ export function Settings() {
                           accountId: account.id,
                           shareUrl: account.shareUrl,
                           label: account.label,
+                          driveId: account.driveId,
+                          itemId: account.itemId,
                         });
                       }
                     }}
@@ -330,11 +345,13 @@ export function Settings() {
                 appearance="primary"
                 disabled={!shareLabel || !shareUrl}
                 onClick={async () => {
-                  // Extract the OneDrive share URL from the invite link
+                  // Extract sharing params from the invite link
                   const params = new URLSearchParams(shareUrl.split('?')[1] || '');
-                  const msShareUrl = params.get('shareUrl') || shareUrl; // Fall back to raw URL if not an invite link
+                  const msShareUrl = params.get('shareUrl') || shareUrl;
+                  const msDriveId = params.get('driveId') || undefined;
+                  const msItemId = params.get('itemId') || undefined;
                   try {
-                    await addSharedAccount(shareLabel, msShareUrl);
+                    await addSharedAccount(shareLabel, msShareUrl, msDriveId, msItemId);
                     // Register as linked user so the owner can see us (best-effort)
                     const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.shareUrl === msShareUrl);
                     if (newAccount) {
@@ -344,6 +361,8 @@ export function Settings() {
                           accountId: newAccount.id,
                           shareUrl: newAccount.shareUrl,
                           label: newAccount.label,
+                          driveId: newAccount.driveId,
+                          itemId: newAccount.itemId,
                         });
                       } catch {
                         // Non-critical — don't block if registration fails

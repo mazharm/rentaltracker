@@ -171,6 +171,8 @@ export function Layout() {
           accountId: account.id,
           shareUrl: account.shareUrl,
           label: account.label,
+          driveId: account.driveId,
+          itemId: account.itemId,
         });
       }
     }

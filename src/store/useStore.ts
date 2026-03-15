@@ -45,7 +45,7 @@ interface AppStore {
   sharingConfig: SharingConfig;
   linkedUsers: LinkedUser[];
   setActiveDataSource: (source: DataSource) => Promise<void>;
-  addSharedAccount: (label: string, shareUrl: string) => Promise<void>;
+  addSharedAccount: (label: string, shareUrl: string, driveId?: string, itemId?: string) => Promise<void>;
   removeSharedAccount: (id: string) => Promise<void>;
   createShareLink: () => Promise<string>;
   loadSharingConfig: () => Promise<void>;
@@ -141,14 +141,14 @@ export const useStore = create<AppStore>((set, get) => ({
     await get().loadFromOneDrive();
   },
 
-  addSharedAccount: async (label, shareUrl) => {
+  addSharedAccount: async (label, shareUrl, driveId?, itemId?) => {
     // Prevent duplicate share URLs
     if (get().sharingConfig.sharedAccounts.some((a) => a.shareUrl === shareUrl)) {
       throw new Error('This shared account has already been added.');
     }
 
     // Validate the share by resolving it first
-    const testSource: DataSource = { type: 'shared', accountId: 'validation', shareUrl, label };
+    const testSource: DataSource = { type: 'shared', accountId: 'validation', shareUrl, label, driveId, itemId };
     await redeemShare(testSource);
 
     // Re-read sharingConfig after the async validation to avoid stale state
@@ -161,6 +161,8 @@ export const useStore = create<AppStore>((set, get) => ({
       id: uuidv4(),
       label,
       shareUrl,
+      driveId,
+      itemId,
       addedAt: new Date().toISOString(),
     };
     set({
@@ -189,9 +191,10 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   createShareLink: async () => {
-    const shareUrl = await apiCreateShareLink();
+    const { shareUrl, driveId, itemId } = await apiCreateShareLink();
     const { sharingConfig } = get();
-    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?shareUrl=${encodeURIComponent(shareUrl)}`;
+    const params = new URLSearchParams({ shareUrl, driveId, itemId });
+    const inviteUrl = `${window.location.origin}/rentaltracker/#/share?${params.toString()}`;
     set({ sharingConfig: { ...sharingConfig, myShareLink: inviteUrl } });
     await get().saveSharingConfig();
     return inviteUrl;

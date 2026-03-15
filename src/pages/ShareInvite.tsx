@@ -52,6 +52,8 @@ export function ShareInvite() {
   const { addSharedAccount, setActiveDataSource, registerAsLinkedUser, sharingConfig } = useStore();
 
   const shareUrl = searchParams.get('shareUrl') || '';
+  const driveId = searchParams.get('driveId') || undefined;
+  const itemId = searchParams.get('itemId') || undefined;
 
   const [label, setLabel] = useState('');
   const [adding, setAdding] = useState(false);
@@ -101,7 +103,7 @@ export function ShareInvite() {
     setAdding(true);
     setError('');
     try {
-      await addSharedAccount(label.trim(), shareUrl);
+      await addSharedAccount(label.trim(), shareUrl, driveId, itemId);
       const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.shareUrl === shareUrl);
       if (newAccount) {
         const source: DataSource = {
@@ -109,6 +111,8 @@ export function ShareInvite() {
           accountId: newAccount.id,
           shareUrl: newAccount.shareUrl,
           label: newAccount.label,
+          driveId: newAccount.driveId,
+          itemId: newAccount.itemId,
         };
         // Register this user in the owner's linked_users.json (best-effort)
         try {
