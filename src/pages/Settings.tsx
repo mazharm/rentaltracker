@@ -256,11 +256,11 @@ export function Settings() {
                   <Button
                     size="small"
                     appearance={isActive ? 'secondary' : 'primary'}
-                    onClick={() => {
+                    onClick={async () => {
                       if (isActive) {
-                        setActiveDataSource({ type: 'own' });
+                        await setActiveDataSource({ type: 'own' });
                       } else {
-                        setActiveDataSource({
+                        await setActiveDataSource({
                           type: 'shared',
                           accountId: account.id,
                           driveId: account.driveId,
@@ -277,7 +277,13 @@ export function Settings() {
                     icon={<Delete24Regular />}
                     size="small"
                     appearance="subtle"
-                    onClick={() => removeSharedAccount(account.id)}
+                    onClick={async () => {
+                      try {
+                        await removeSharedAccount(account.id);
+                      } catch (e) {
+                        console.error('Failed to remove account:', e);
+                      }
+                    }}
                   />
                 </div>
               </Card>
@@ -309,7 +315,8 @@ export function Settings() {
                   const itemId = params.get('itemId') || '';
                   const msShareUrl = params.get('shareUrl') || '';
                   if (!driveId || !itemId || !msShareUrl) {
-                    alert('Invalid invite link. Please paste a valid invite link.');
+                    const missing = [!driveId && 'driveId', !itemId && 'itemId', !msShareUrl && 'shareUrl'].filter(Boolean).join(', ');
+                    alert(`Invalid invite link — missing ${missing}. Please paste the full invite link from the account owner.`);
                     return;
                   }
                   await addSharedAccount(shareLabel, driveId, itemId, msShareUrl);

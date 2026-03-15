@@ -68,9 +68,9 @@ export function PropertyForm({ property, onClose }: Props) {
     property?.rentSchedule ?? [{ startMonth: defaultRentStartMonth(), amount: 0 }]
   );
   const [taxAmounts, setTaxAmounts] = useState<PropertyTaxYear[]>(
-    property?.propertyTax.annualAmounts ?? [{ year: new Date().getFullYear(), amount: 0 }]
+    property?.propertyTax?.annualAmounts ?? [{ year: new Date().getFullYear(), amount: 0 }]
   );
-  const [taxMonth, setTaxMonth] = useState(String(property?.propertyTax.dueMonth ?? 1));
+  const [taxMonth, setTaxMonth] = useState(String(property?.propertyTax?.dueMonth ?? 1));
   const [status, setStatus] = useState<'active' | 'inactive'>(property?.status ?? 'active');
 
   const handleSave = async () => {
