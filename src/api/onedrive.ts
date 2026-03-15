@@ -40,7 +40,9 @@ async function graphFetch(url: string, options: RequestInit = {}): Promise<Respo
 
 function getBasePath(source: DataSource): string {
   if (source.type === 'own') return APP_ROOT;
-  return `/drives/${source.driveId}/items/${source.itemId}:`;
+  // Use the /shares/ endpoint to access shared content via the Microsoft sharing URL
+  const token = encodeSharingUrl(source.shareUrl);
+  return `/shares/${token}/root:`;
 }
 
 export interface OneDriveFile<T> {
@@ -120,8 +122,14 @@ export async function getAppRootInfo(): Promise<{ driveId: string; itemId: strin
   return { driveId: data.parentReference.driveId, itemId: data.id };
 }
 
-/** Create an edit sharing link on the app root folder and return drive coordinates */
-export async function createShareLink(): Promise<{ driveId: string; itemId: string }> {
+/** Encode a Microsoft sharing URL into a sharing token for the /shares/ endpoint */
+export function encodeSharingUrl(sharingUrl: string): string {
+  const base64 = btoa(sharingUrl);
+  return 'u!' + base64.replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+}
+
+/** Create an edit sharing link on the app root folder and return drive coordinates + sharing URL */
+export async function createShareLink(): Promise<{ driveId: string; itemId: string; shareUrl: string }> {
   const { driveId, itemId } = await getAppRootInfo();
   const response = await graphFetch(`/me/drive/items/${itemId}/createLink`, {
     method: 'POST',
@@ -131,7 +139,12 @@ export async function createShareLink(): Promise<{ driveId: string; itemId: stri
   if (!response.ok) {
     throw new Error(`Failed to create share link: ${response.status}`);
   }
-  return { driveId, itemId };
+  const data = await response.json();
+  const shareUrl = data.link?.webUrl;
+  if (!shareUrl) {
+    throw new Error('Share link created but no webUrl returned');
+  }
+  return { driveId, itemId, shareUrl };
 }
 
 export class ConflictError extends Error {
