@@ -13,7 +13,6 @@ import {
   DialogBody,
   DialogActions,
   Button,
-  SpinButton,
   Dropdown,
   Option,
   Field,
@@ -258,11 +257,10 @@ function RentEditDialog({ entry, onClose, onSave }: {
           </Field>
 
           <Field label="Amount">
-            <SpinButton
-              value={actualAmount}
-              onChange={(_, d) => setActualAmount(d.value ?? 0)}
-              min={0}
-              step={50}
+            <Input
+              type="number"
+              value={String(actualAmount)}
+              onChange={(_, d) => setActualAmount(Math.max(0, Number(d.value) || 0))}
               disabled={status === 'vacant'}
             />
           </Field>

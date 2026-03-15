@@ -45,10 +45,28 @@ export function encodeSharingUrl(sharingUrl: string): string {
   return `u!${encoded}`;
 }
 
-function getBasePath(source: DataSource): string {
+/** Cache resolved share tokens to avoid extra API calls */
+const resolvedShares = new Map<string, { driveId: string; itemId: string }>();
+
+async function resolveShare(sharingUrl: string): Promise<{ driveId: string; itemId: string }> {
+  const token = encodeSharingUrl(sharingUrl);
+  const cached = resolvedShares.get(token);
+  if (cached) return cached;
+
+  const response = await graphFetch(`/shares/${token}/driveItem?$select=id,parentReference`);
+  if (!response.ok) {
+    throw new Error(`Failed to resolve shared folder: ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  const resolved = { driveId: data.parentReference.driveId, itemId: data.id };
+  resolvedShares.set(token, resolved);
+  return resolved;
+}
+
+async function getBasePath(source: DataSource): Promise<string> {
   if (source.type === 'own') return APP_ROOT;
-  const token = encodeSharingUrl(source.sharingUrl);
-  return `/shares/${token}/driveItem:`;
+  const { driveId, itemId } = await resolveShare(source.sharingUrl);
+  return `/drives/${driveId}/items/${itemId}:`;
 }
 
 export interface OneDriveFile<T> {
@@ -57,7 +75,7 @@ export interface OneDriveFile<T> {
 }
 
 export async function readJsonFile<T>(path: string, source: DataSource = { type: 'own' }): Promise<OneDriveFile<T> | null> {
-  const base = getBasePath(source);
+  const base = await getBasePath(source);
   const response = await graphFetch(`${base}/${path}:/content`);
   if (response.status === 404) return null;
   if (!response.ok) {
@@ -69,7 +87,7 @@ export async function readJsonFile<T>(path: string, source: DataSource = { type:
 }
 
 export async function writeJsonFile<T>(path: string, data: T, expectedETag?: string | null, source: DataSource = { type: 'own' }): Promise<string | null> {
-  const base = getBasePath(source);
+  const base = await getBasePath(source);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -95,7 +113,7 @@ export async function writeJsonFile<T>(path: string, data: T, expectedETag?: str
 }
 
 export async function deleteFile(path: string, source: DataSource = { type: 'own' }): Promise<void> {
-  const base = getBasePath(source);
+  const base = await getBasePath(source);
   const response = await graphFetch(`${base}/${path}`, {
     method: 'DELETE',
   });
@@ -105,7 +123,7 @@ export async function deleteFile(path: string, source: DataSource = { type: 'own
 }
 
 export async function listFolder(path: string, source: DataSource = { type: 'own' }): Promise<{ name: string; lastModifiedDateTime: string }[]> {
-  const base = getBasePath(source);
+  const base = await getBasePath(source);
   const response = await graphFetch(`${base}/${path}:/children`);
   if (response.status === 404) return [];
   if (!response.ok) {
