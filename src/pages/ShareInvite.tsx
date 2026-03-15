@@ -50,16 +50,16 @@ export function ShareInvite() {
   const navigate = useNavigate();
   const { addSharedAccount, setActiveDataSource, registerAsLinkedUser, sharingConfig } = useStore();
 
-  const encodedLink = searchParams.get('link');
-  const oneDriveLink = encodedLink ? decodeURIComponent(encodedLink) : '';
+  const driveId = searchParams.get('driveId') || '';
+  const itemId = searchParams.get('itemId') || '';
 
   const [label, setLabel] = useState('');
   const [adding, setAdding] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
 
-  // Check if this link is already added
-  const alreadyAdded = sharingConfig.sharedAccounts.some((a) => a.sharingUrl === oneDriveLink);
+  // Check if this drive/item combo is already added
+  const alreadyAdded = sharingConfig.sharedAccounts.some((a) => a.driveId === driveId && a.itemId === itemId);
 
   useEffect(() => {
     if (alreadyAdded) {
@@ -67,7 +67,7 @@ export function ShareInvite() {
     }
   }, [alreadyAdded]);
 
-  if (!oneDriveLink) {
+  if (!driveId || !itemId) {
     return (
       <div className={styles.container}>
         <Card className={styles.card}>
@@ -102,14 +102,15 @@ export function ShareInvite() {
     setAdding(true);
     setError('');
     try {
-      await addSharedAccount(label.trim(), oneDriveLink);
+      await addSharedAccount(label.trim(), driveId, itemId);
       // Switch to the newly added account
-      const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.sharingUrl === oneDriveLink);
+      const newAccount = useStore.getState().sharingConfig.sharedAccounts.find((a) => a.driveId === driveId && a.itemId === itemId);
       if (newAccount) {
         const source = {
           type: 'shared' as const,
           accountId: newAccount.id,
-          sharingUrl: newAccount.sharingUrl,
+          driveId: newAccount.driveId,
+          itemId: newAccount.itemId,
           label: newAccount.label,
         };
         // Register this user in the owner's linked_users.json
